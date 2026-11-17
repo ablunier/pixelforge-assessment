@@ -106,13 +106,27 @@ it('computes the Provider Cost of real usage at the locked rates', function () {
     expect(Pricing::providerCost($usage, docsRates())->formatExact())->toBe('0.305510000');
 });
 
+/** A Maximum Price no test cost comes near. */
+function noCap(): Money
+{
+    return Money::fromDecimal('1000.00');
+}
+
 it('prices a Provider Cost with the Markup, exact to the nanodollar', function () {
-    expect(Pricing::price(Money::fromDecimal('0.305510000'))->formatExact())->toBe('0.381887500')
-        ->and(Pricing::price(Money::fromDecimal('0.169080000'))->formatExact())->toBe('0.211350000');
+    expect(Pricing::price(Money::fromDecimal('0.305510000'), noCap())->formatExact())->toBe('0.381887500')
+        ->and(Pricing::price(Money::fromDecimal('0.169080000'), noCap())->formatExact())->toBe('0.211350000');
 });
 
+it('never prices a Provider Cost above the Maximum Price', function (string $maximumPrice, string $price) {
+    expect(Pricing::price(Money::fromDecimal('0.305510000'), Money::fromDecimal($maximumPrice))->formatExact())->toBe($price);
+})->with([
+    'below the cap' => ['0.381887501', '0.381887500'],
+    'exactly at the cap' => ['0.381887500', '0.381887500'],
+    'above the cap: the Maximum Price' => ['0.300000000', '0.300000000'],
+]);
+
 it('rounds the Markup half up to the nanodollar when the cost is not divisible by 4', function (int $cost, int $price) {
-    expect(Pricing::price(Money::ofNanodollars($cost))->nanodollars())->toBe($price);
+    expect(Pricing::price(Money::ofNanodollars($cost), noCap())->nanodollars())->toBe($price);
 })->with([
     [1, 1],   // 1.25
     [2, 3],   // 2.5

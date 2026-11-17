@@ -81,7 +81,7 @@ class ReviewerSeeder extends Seeder
         $generation->output_tokens = $usage->outputTokens;
         $generation->reasoning_tokens = $usage->reasoningTokens;
         $generation->provider_cost = Pricing::providerCost($usage, $lockedRates);
-        $generation->price = Pricing::price($generation->provider_cost);
+        $generation->price = Pricing::price($generation->provider_cost, $generation->max_price);
         $generation->save();
 
         return $generation;

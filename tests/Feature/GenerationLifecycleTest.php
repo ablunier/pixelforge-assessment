@@ -148,6 +148,30 @@ it('polls a Generation from queued through processing to succeeded and records i
     expect(pollsSent())->toBe(2);
 });
 
+it('caps the Price at the Maximum Price when Pixelforge locked higher rates than the estimate used, recording the true Provider Cost', function () {
+    // Pixelforge doubled its rates between the estimate and accepting the Generation.
+    $doubled = ['input_text_tokens' => '10.00', 'input_image_tokens' => '20.00', 'output_tokens' => '80.00', 'reasoning_tokens' => '25.00'];
+    Http::fake([
+        'pixelforge.test/v1/generations' => fn (Request $request) => Http::response(
+            pixelforgeGeneration('queued', ['metadata' => $request['metadata'], 'rates' => $doubled]),
+            202,
+        ),
+    ]);
+    $generation = generateLighthouse();
+    fakePixelforgePolls($generation, [pixelforgeGeneration('succeeded', ['rates' => $doubled])]);
+
+    $this->travel(61)->seconds();
+    reconcile();
+    $generation->refresh();
+
+    // Maximum Price at the published rates: (14×5,000 + 765×10,000 + 6,450×40,000 + 8,000×12,500) × 5/4.
+    // Provider Cost at the locked rates: 12×10,000 + 765×20,000 + 6,450×80,000 + 3,184×25,000.
+    expect($generation->status)->toBe(GenerationStatus::Succeeded)
+        ->and($generation->max_price->nanodollars())->toBe(457_150_000)
+        ->and($generation->provider_cost?->nanodollars())->toBe(611_020_000)
+        ->and($generation->price?->nanodollars())->toBe(457_150_000);
+});
+
 it('runs reconciliation every minute, one run at a time', function () {
     $events = collect(app(Schedule::class)->events())
         ->filter(fn (Event $event) => str_contains((string) $event->command, 'generations:reconcile'));

@@ -101,7 +101,7 @@ final class GenerationLifecycle
         $generation->output_tokens = $snapshot->usage->outputTokens;
         $generation->reasoning_tokens = $snapshot->usage->reasoningTokens;
         $generation->provider_cost = Pricing::providerCost($snapshot->usage, $lockedRates);
-        $generation->price = Pricing::price($generation->provider_cost);
+        $generation->price = Pricing::price($generation->provider_cost, $generation->max_price);
         $generation->provider_image_url = $snapshot->imageUrl;
         $generation->provider_image_url_expires_at = $snapshot->imageUrlExpiresAt;
 

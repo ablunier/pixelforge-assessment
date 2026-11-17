@@ -92,11 +92,16 @@ final class Pricing
     }
 
     /**
-     * The Price of a Provider Cost: the cost plus the 25% Markup.
+     * The Price of a succeeded Generation: its Provider Cost plus the 25%
+     * Markup, capped at the Maximum Price it was shown (ADR-0004). The cap
+     * only bites when Pixelforge locked higher rates than the estimate used;
+     * the business absorbs the difference.
      */
-    public static function price(Money $providerCost): Money
+    public static function price(Money $providerCost, Money $maximumPrice): Money
     {
-        return self::withMarkup($providerCost);
+        $price = self::withMarkup($providerCost);
+
+        return $price->isGreaterThan($maximumPrice) ? $maximumPrice : $price;
     }
 
     /**

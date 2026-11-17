@@ -17,6 +17,10 @@ use Illuminate\Support\Str;
 class GenerationFactory extends Factory
 {
     /**
+     * Shaped like the Pixelforge docs' lighthouse example that the tests'
+     * pixelforgeGeneration() reports, so its snapshots stay within this
+     * Generation's Maximum Price.
+     *
      * @return array<string, mixed>
      */
     public function definition(): array
@@ -24,12 +28,12 @@ class GenerationFactory extends Factory
         return [
             'user_id' => User::factory(),
             'prompt' => fake()->sentence(),
-            'size' => Size::Square,
-            'quality' => Quality::Medium,
-            'reference_images' => [],
+            'size' => Size::Landscape,
+            'quality' => Quality::High,
+            'reference_images' => ['https://example.com/style.png'],
             'status' => GenerationStatus::Pending,
-            // About the Maximum Price of a 1024x1024 medium Generation with a short prompt.
-            'max_price' => Money::ofNanodollars(86_400_000),
+            // The Maximum Price of the lighthouse prompt (45 characters) at the published rates.
+            'max_price' => Money::ofNanodollars(457_150_000),
         ];
     }
 
