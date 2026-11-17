@@ -16,6 +16,9 @@ beforeEach(function () {
         'services.pixelforge.api_key' => 'pf_test_key',
     ]);
     fakePixelforgePricing();
+
+    // Before the fixture's image URL expires, so a replayed success downloads its image.
+    $this->travelTo('2026-11-04T14:03:00Z');
 });
 
 /**
