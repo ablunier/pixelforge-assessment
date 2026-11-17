@@ -111,6 +111,15 @@ it('prices a Provider Cost with the Markup, exact to the nanodollar', function (
         ->and(Pricing::price(Money::fromDecimal('0.169080000'))->formatExact())->toBe('0.211350000');
 });
 
+it('rounds the Markup half up to the nanodollar when the cost is not divisible by 4', function (int $cost, int $price) {
+    expect(Pricing::price(Money::ofNanodollars($cost))->nanodollars())->toBe($price);
+})->with([
+    [1, 1],   // 1.25
+    [2, 3],   // 2.5
+    [3, 4],   // 3.75
+    [4, 5],
+]);
+
 it('rejects rates that are not a whole number of nanodollars per token', function () {
     Rates::fromPixelforge([
         'input_text_tokens' => '5.0001',

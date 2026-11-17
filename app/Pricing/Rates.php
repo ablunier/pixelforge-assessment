@@ -63,13 +63,13 @@ final readonly class Rates implements JsonSerializable
             throw new InvalidArgumentException("Pixelforge rate \"{$key}\" is missing or not a decimal string.");
         }
 
-        $perQuote = Money::fromDecimal($quote)->nanodollars();
-
         // A whole number of nanodollars per token needs a rate with at most 3 decimals.
-        if ($perQuote < 0 || $perQuote % self::TOKENS_PER_QUOTE !== 0) {
+        $perToken = Money::fromDecimal($quote)->dividedExactlyBy(self::TOKENS_PER_QUOTE);
+
+        if ($perToken === null || $perToken->isLessThan(Money::ofNanodollars(0))) {
             throw new InvalidArgumentException("Pixelforge rate \"{$key}\" ({$quote}) isn't a whole number of nanodollars per token.");
         }
 
-        return Money::ofNanodollars(intdiv($perQuote, self::TOKENS_PER_QUOTE));
+        return $perToken;
     }
 }
