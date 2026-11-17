@@ -43,7 +43,7 @@ class StoreGenerationImage implements ShouldQueue
             return;
         }
 
-        if (! $this->hasLiveImageUrl($generation) && $generation->pixelforge_id !== null) {
+        if (! $generation->hasLiveProviderImageUrl() && $generation->pixelforge_id !== null) {
             // A fresh signed URL, though it expires at the same time as the old one.
             $snapshot = $pixelforge->retrieveGeneration($generation->pixelforge_id);
             $generation->provider_image_url = $snapshot->imageUrl;
@@ -51,7 +51,7 @@ class StoreGenerationImage implements ShouldQueue
             $generation->save();
         }
 
-        if (! $this->hasLiveImageUrl($generation)) {
+        if (! $generation->hasLiveProviderImageUrl()) {
             // Expired for good: the history shows the "image expired" placeholder.
             return;
         }
@@ -63,11 +63,5 @@ class StoreGenerationImage implements ShouldQueue
 
         $generation->image_path = $path;
         $generation->save();
-    }
-
-    private function hasLiveImageUrl(Generation $generation): bool
-    {
-        return $generation->provider_image_url !== null
-            && $generation->provider_image_url_expires_at?->isFuture() === true;
     }
 }

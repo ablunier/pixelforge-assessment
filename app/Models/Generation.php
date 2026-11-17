@@ -60,6 +60,9 @@ class Generation extends Model
     /** @use HasFactory<GenerationFactory> */
     use HasFactory, HasUlids;
 
+    /** How many of a user's newest Generations the history shows. */
+    public const int HISTORY_LIMIT = 50;
+
     /**
      * @return array<string, string>
      */
@@ -98,6 +101,17 @@ class Generation extends Model
     }
 
     /**
+     * The newest Generations, newest first, as the history shows them.
+     *
+     * @param  Builder<self>  $query
+     */
+    #[Scope]
+    protected function history(Builder $query): void
+    {
+        $query->latest()->orderByDesc('id')->limit(self::HISTORY_LIMIT);
+    }
+
+    /**
      * Generations that haven't reached a final status yet.
      *
      * @param  Builder<self>  $query
@@ -127,6 +141,15 @@ class Generation extends Model
             Money::ofNanodollars($this->output_token_rate),
             Money::ofNanodollars($this->reasoning_token_rate),
         );
+    }
+
+    /**
+     * Whether Pixelforge's signed image URL is known and hasn't expired yet.
+     */
+    public function hasLiveProviderImageUrl(): bool
+    {
+        return $this->provider_image_url !== null
+            && $this->provider_image_url_expires_at?->isFuture() === true;
     }
 
     public function lockRates(Rates $rates): void

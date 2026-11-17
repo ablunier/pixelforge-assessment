@@ -8,6 +8,7 @@ use App\Models\Generation;
 use App\Pixelforge\GenerationErrorCode;
 use App\Pixelforge\GenerationSnapshot;
 use App\Pricing\Pricing;
+use Closure;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 
@@ -28,9 +29,7 @@ final class GenerationLifecycle
      */
     public function apply(Generation $generation, GenerationSnapshot $snapshot): Generation
     {
-        return DB::transaction(function () use ($generation, $snapshot): Generation {
-            $generation = Generation::query()->whereKey($generation->getKey())->lockForUpdate()->firstOrFail();
-
+        return $this->underLock($generation, function (Generation $generation) use ($snapshot): void {
             // From whichever source reports them first, e.g. the create response or an early webhook.
             $generation->pixelforge_id ??= $snapshot->pixelforgeId;
 
@@ -50,10 +49,6 @@ final class GenerationLifecycle
                     default => null,
                 };
             }
-
-            $generation->save();
-
-            return $generation;
         });
     }
 
@@ -66,15 +61,28 @@ final class GenerationLifecycle
      */
     public function failSubmission(Generation $generation, GenerationErrorCode|string $errorCode, ?string $errorMessage): Generation
     {
-        return DB::transaction(function () use ($generation, $errorCode, $errorMessage): Generation {
-            $generation = Generation::query()->whereKey($generation->getKey())->lockForUpdate()->firstOrFail();
-
+        return $this->underLock($generation, function (Generation $generation) use ($errorCode, $errorMessage): void {
             if ($generation->status->canMoveTo(GenerationStatus::Failed) && $generation->pixelforge_id === null) {
                 $generation->status = GenerationStatus::Failed;
                 $generation->error_code = $errorCode instanceof GenerationErrorCode ? $errorCode->value : $errorCode;
                 $generation->error_message = $errorMessage;
-                $generation->save();
             }
+        });
+    }
+
+    /**
+     * Re-read the Generation under its row lock, let `$change` modify it, and
+     * save it, all in one transaction. Returns the saved Generation.
+     *
+     * @param  Closure(Generation): void  $change
+     */
+    private function underLock(Generation $generation, Closure $change): Generation
+    {
+        return DB::transaction(function () use ($generation, $change): Generation {
+            $generation = Generation::query()->whereKey($generation->getKey())->lockForUpdate()->firstOrFail();
+
+            $change($generation);
+            $generation->save(); // A no-op when nothing changed.
 
             return $generation;
         });

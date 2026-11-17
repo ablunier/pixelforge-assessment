@@ -60,14 +60,13 @@ class GenerationResource extends JsonResource
             ];
         }
 
-        $expiresAt = $this->provider_image_url_expires_at;
-        $live = $this->provider_image_url !== null && $expiresAt?->isFuture() === true;
+        $live = $this->resource->hasLiveProviderImageUrl();
 
         return [
             'source' => $live ? 'provider' : 'expired',
             'url' => $live ? $this->provider_image_url : null,
             'downloadUrl' => $live ? $this->provider_image_url : null,
-            'expiresAt' => $expiresAt?->toIso8601ZuluString(),
+            'expiresAt' => $this->provider_image_url_expires_at?->toIso8601ZuluString(),
         ];
     }
 }
