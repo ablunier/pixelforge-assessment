@@ -105,8 +105,11 @@ final class GenerationLifecycle
         $generation->provider_image_url = $snapshot->imageUrl;
         $generation->provider_image_url_expires_at = $snapshot->imageUrlExpiresAt;
 
-        // Once this transaction commits, so the job sees the succeeded Generation.
-        StoreGenerationImage::dispatch($generation)->afterCommit();
+        // Pixelforge always sends an image URL with a success; without one there's nothing to download.
+        if ($snapshot->imageUrl !== null) {
+            // Once this transaction commits, so the job sees the succeeded Generation.
+            StoreGenerationImage::dispatch($generation)->afterCommit();
+        }
     }
 
     private function recordFailure(Generation $generation, GenerationSnapshot $snapshot): void
