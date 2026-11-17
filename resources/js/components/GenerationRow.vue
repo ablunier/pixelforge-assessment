@@ -1,13 +1,17 @@
 <script setup lang="ts">
-import { ImageIcon } from '@lucide/vue';
+import { Form } from '@inertiajs/vue3';
+import { ImageIcon, RotateCcw } from '@lucide/vue';
+import GenerationController from '@/actions/App/Http/Controllers/GenerationController';
 import GenerationStatusBadge from '@/components/GenerationStatusBadge.vue';
 import Price from '@/components/Price.vue';
+import { Button } from '@/components/ui/button';
 import type { Generation } from '@/types';
 
 /**
  * One Generation in the history. Later features plug in through the slots:
  * `thumbnail` (the image), `outcome` (how a final Generation ended) and
- * `actions` (e.g. "Try again"), each receiving the Generation.
+ * `actions` ("Try again" on failed Generations by default), each receiving
+ * the Generation.
  */
 defineProps<{
     generation: Generation;
@@ -54,8 +58,27 @@ defineProps<{
                 </p>
             </slot>
 
-            <div v-if="$slots.actions" class="flex gap-2 pt-1">
-                <slot name="actions" :generation="generation" />
+            <div
+                v-if="$slots.actions || generation.status === 'failed'"
+                class="flex gap-2 pt-1"
+            >
+                <slot name="actions" :generation="generation">
+                    <Form
+                        v-bind="GenerationController.tryAgain.form(generation)"
+                        :options="{ preserveScroll: true }"
+                        v-slot="{ processing }"
+                    >
+                        <Button
+                            type="submit"
+                            variant="outline"
+                            size="sm"
+                            :disabled="processing"
+                        >
+                            <RotateCcw aria-hidden="true" />
+                            Try again
+                        </Button>
+                    </Form>
+                </slot>
             </div>
         </div>
     </li>
