@@ -2,9 +2,9 @@
 
 namespace App\Http\Resources;
 
-use App\Enums\GenerationErrorCode;
 use App\Enums\GenerationStatus;
 use App\Models\Generation;
+use App\Pixelforge\GenerationErrorCode;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -32,7 +32,7 @@ class GenerationResource extends JsonResource
             'error' => $this->error_code === null ? null : [
                 'code' => $this->error_code,
                 'message' => $this->error_message,
-                'reason' => GenerationErrorCode::reasonFor($this->error_code),
+                'reason' => GenerationErrorCode::reasonFor($this->error_code, $this->submission_attempts),
             ],
             'createdAt' => $this->created_at?->toIso8601ZuluString(),
             'image' => $this->image(),

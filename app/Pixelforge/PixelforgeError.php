@@ -45,6 +45,14 @@ final class PixelforgeError extends RuntimeException
         return in_array($this->errorCode, self::RETRYABLE, true) || $this->httpStatus >= 500;
     }
 
+    /**
+     * Pixelforge's per-account limit of 3 Generations in flight: "not yet", not "busy".
+     */
+    public function isConcurrencyLimit(): bool
+    {
+        return $this->errorCode === 'concurrency_limit_exceeded';
+    }
+
     public function isAuthFailure(): bool
     {
         return $this->errorCode === 'invalid_api_key';

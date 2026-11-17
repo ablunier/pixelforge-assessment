@@ -5,6 +5,7 @@ namespace App\Actions;
 use App\Enums\GenerationStatus;
 use App\Jobs\StoreGenerationImage;
 use App\Models\Generation;
+use App\Pixelforge\GenerationErrorCode;
 use App\Pixelforge\GenerationSnapshot;
 use App\Pricing\Pricing;
 use Illuminate\Support\Facades\DB;
@@ -60,15 +61,17 @@ final class GenerationLifecycle
      * End a Generation that Pixelforge never accepted (a rejected submission or
      * exhausted retries) as `failed`, with no Provider Cost or Price. Ignored
      * if the Generation has already moved on, e.g. through an early webhook.
+     * `$errorCode` is Pixelforge's code as sent (possibly one this app doesn't
+     * know yet) or a GenerationErrorCode.
      */
-    public function failSubmission(Generation $generation, string $errorCode, ?string $errorMessage): Generation
+    public function failSubmission(Generation $generation, GenerationErrorCode|string $errorCode, ?string $errorMessage): Generation
     {
         return DB::transaction(function () use ($generation, $errorCode, $errorMessage): Generation {
             $generation = Generation::query()->whereKey($generation->getKey())->lockForUpdate()->firstOrFail();
 
             if ($generation->status->canMoveTo(GenerationStatus::Failed) && $generation->pixelforge_id === null) {
                 $generation->status = GenerationStatus::Failed;
-                $generation->error_code = $errorCode;
+                $generation->error_code = $errorCode instanceof GenerationErrorCode ? $errorCode->value : $errorCode;
                 $generation->error_message = $errorMessage;
                 $generation->save();
             }
@@ -100,7 +103,7 @@ final class GenerationLifecycle
 
     private function recordFailure(Generation $generation, GenerationSnapshot $snapshot): void
     {
-        $generation->error_code = $snapshot->errorCode ?? 'generation_failed';
+        $generation->error_code = $snapshot->errorCode ?? GenerationErrorCode::GenerationFailed->value;
         $generation->error_message = $snapshot->errorMessage;
     }
 }

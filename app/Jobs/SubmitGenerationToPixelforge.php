@@ -3,9 +3,9 @@
 namespace App\Jobs;
 
 use App\Actions\GenerationLifecycle;
-use App\Enums\GenerationErrorCode;
 use App\Enums\GenerationStatus;
 use App\Models\Generation;
+use App\Pixelforge\GenerationErrorCode;
 use App\Pixelforge\PixelforgeClient;
 use App\Pixelforge\PixelforgeError;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -99,7 +99,7 @@ class SubmitGenerationToPixelforge implements ShouldQueue
         $generation->increment('submission_attempts');
 
         if ($generation->submission_attempts >= self::MAX_ATTEMPTS) {
-            $lifecycle->failSubmission($generation, GenerationErrorCode::RetriesExhausted->value, $reason);
+            $lifecycle->failSubmission($generation, GenerationErrorCode::RetriesExhausted, $reason);
         } else {
             $this->retryLater($generation, $retryAfter ?? self::backoffSeconds($generation->submission_attempts));
         }
@@ -113,7 +113,7 @@ class SubmitGenerationToPixelforge implements ShouldQueue
      */
     private function waitingItsTurn(Generation $generation, PixelforgeError $error): bool
     {
-        return $error->errorCode === 'concurrency_limit_exceeded'
+        return $error->isConcurrencyLimit()
             && $generation->created_at?->addMinutes(self::MAX_CONCURRENCY_WAIT_MINUTES)->isFuture();
     }
 

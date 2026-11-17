@@ -1,12 +1,12 @@
 <?php
 
-namespace App\Enums;
-
-use App\Jobs\SubmitGenerationToPixelforge;
+namespace App\Pixelforge;
 
 /**
- * Why a Generation failed: Pixelforge's error codes, plus `retries_exhausted`,
- * which is ours.
+ * Why a Generation failed: the Pixelforge error codes it can end with, plus
+ * `retries_exhausted`, which the submission records when Pixelforge never
+ * gave it a definite answer. Pixelforge's codes stay inside this boundary:
+ * the rest of the app stores the code and shows reasonFor().
  */
 enum GenerationErrorCode: string
 {
@@ -25,14 +25,15 @@ enum GenerationErrorCode: string
 
     /**
      * What the user reads in the history, for any recorded error code,
-     * including ones Pixelforge adds later.
+     * including ones Pixelforge adds later. `$submissionAttempts` is how many
+     * create requests the Generation got.
      */
-    public static function reasonFor(string $code): string
+    public static function reasonFor(string $code, int $submissionAttempts): string
     {
-        return self::tryFrom($code)?->reason() ?? "Pixelforge couldn't complete this Generation";
+        return self::tryFrom($code)?->reason($submissionAttempts) ?? "Pixelforge couldn't complete this Generation";
     }
 
-    public function reason(): string
+    public function reason(int $submissionAttempts): string
     {
         return match ($this) {
             self::ContentPolicyViolation => 'Blocked by content policy',
@@ -41,7 +42,7 @@ enum GenerationErrorCode: string
             self::IdempotencyKeyReused => 'Pixelforge rejected a conflicting resubmission',
             self::GenerationFailed => "The model couldn't produce an image",
             self::InternalError => 'Pixelforge had an internal error; trying again usually works',
-            self::RetriesExhausted => 'Provider busy, gave up after '.SubmitGenerationToPixelforge::MAX_ATTEMPTS.' attempts',
+            self::RetriesExhausted => "Provider busy, gave up after {$submissionAttempts} attempts",
         };
     }
 }

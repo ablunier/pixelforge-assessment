@@ -237,7 +237,7 @@ it('explains each failure in plain language in the history', function (string $c
     $user = User::factory()->create();
     Generation::factory()->for($user)->failed()
         ->afterMaking(fn (Generation $generation) => $generation->error_code = $code)
-        ->create();
+        ->create(['submission_attempts' => 5]);
 
     $this->actingAs($user)
         ->get(route('dashboard'))

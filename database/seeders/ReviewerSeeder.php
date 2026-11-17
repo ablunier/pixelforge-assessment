@@ -3,13 +3,13 @@
 namespace Database\Seeders;
 
 use App\Console\Commands\CreateReviewer;
-use App\Enums\GenerationErrorCode;
 use App\Enums\GenerationStatus;
 use App\Enums\Quality;
 use App\Enums\Size;
 use App\Models\Generation;
 use App\Models\User;
 use App\Models\WebhookEvent;
+use App\Pixelforge\GenerationErrorCode;
 use App\Pricing\Pricing;
 use App\Pricing\Rates;
 use App\Pricing\Usage;
