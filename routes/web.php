@@ -12,6 +12,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('generations', [GenerationController::class, 'store'])
         ->middleware('precognitive')
         ->name('generations.store');
+    Route::post('generations/{generation}/try-again', [GenerationController::class, 'tryAgain'])
+        ->can('tryAgain', 'generation')
+        ->name('generations.try-again');
     Route::get('generations/{generation}/image', [GenerationImageController::class, 'show'])
         ->name('generations.image');
     Route::get('generations/{generation}/image/download', [GenerationImageController::class, 'download'])
