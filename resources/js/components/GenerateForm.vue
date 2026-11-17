@@ -40,7 +40,7 @@ const qualityLabels: Record<Quality, string> = {
 };
 
 // Live validation against the server's rules (Laravel Precognition): the
-// form is validated as the user goes but not submitted yet.
+// form is validated as the user goes, and the server validates it again on submit.
 const form = useForm(GenerationController.store(), {
     prompt: '',
     size: props.options.defaultSize,
@@ -128,21 +128,16 @@ const hasClientErrors = computed(
         ),
 );
 
-function validateAll(): void {
-    form.touch([
-        'prompt',
-        'size',
-        'quality',
-        'reference_images',
-        ...form.reference_images.map(
-            (_, index) => `reference_images.${index}` as const,
-        ),
-    ]).validate();
+function submit(): void {
+    form.submit({
+        preserveScroll: true,
+        onSuccess: () => form.reset('prompt'),
+    });
 }
 </script>
 
 <template>
-    <form class="grid gap-6" novalidate @submit.prevent="validateAll">
+    <form class="grid gap-6" novalidate @submit.prevent="submit">
         <div class="grid gap-2">
             <Label for="prompt">Prompt</Label>
             <textarea
@@ -310,13 +305,12 @@ function validateAll(): void {
             <div class="flex flex-col items-start gap-1 sm:items-end">
                 <Button
                     type="submit"
-                    :disabled="hasClientErrors || form.validating"
+                    :disabled="
+                        hasClientErrors || form.validating || form.processing
+                    "
                 >
                     Generate
                 </Button>
-                <p class="text-xs text-muted-foreground">
-                    Generating is coming soon.
-                </p>
             </div>
         </div>
     </form>

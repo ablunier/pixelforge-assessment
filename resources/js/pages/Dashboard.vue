@@ -1,10 +1,16 @@
 <script setup lang="ts">
 import { Head } from '@inertiajs/vue3';
 import GenerateForm from '@/components/GenerateForm.vue';
+import GenerationHistory from '@/components/GenerationHistory.vue';
 import Heading from '@/components/Heading.vue';
 import { priceRange as mirroredPriceRange } from '@/lib/pricing';
 import { dashboard } from '@/routes';
-import type { GenerateFormOptions, PriceRange, PricingData } from '@/types';
+import type {
+    GenerateFormOptions,
+    Generation,
+    PriceRange,
+    PricingData,
+} from '@/types';
 
 defineOptions({
     layout: {
@@ -22,6 +28,8 @@ const props = defineProps<{
     /** The server's Price Range for the form's defaults. */
     priceRange: PriceRange;
     options: GenerateFormOptions;
+    /** The user's Generations, newest first. */
+    generations: Generation[];
 }>();
 
 // Guard against the TypeScript mirror drifting from App\Pricing\Pricing.
@@ -58,6 +66,16 @@ if (import.meta.env.DEV) {
                 description="Describe the image you want. You pay Pixelforge's cost plus 25%, and nothing if it fails."
             />
             <GenerateForm :pricing="pricing" :options="options" />
+        </section>
+
+        <section
+            class="mx-auto w-full max-w-3xl rounded-xl border border-sidebar-border/70 p-6 dark:border-sidebar-border"
+        >
+            <Heading
+                title="Your Generations"
+                description="Newest first. Reload to see the latest status."
+            />
+            <GenerationHistory :generations="generations" />
         </section>
     </div>
 </template>

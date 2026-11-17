@@ -29,6 +29,32 @@ class StoreGenerationRequest extends FormRequest
         ];
     }
 
+    public function prompt(): string
+    {
+        return $this->string('prompt')->toString();
+    }
+
+    public function size(): Size
+    {
+        return Size::from($this->string('size')->toString());
+    }
+
+    public function quality(): Quality
+    {
+        return Quality::from($this->string('quality')->toString());
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function referenceImages(): array
+    {
+        /** @var array<int, string> $referenceImages */
+        $referenceImages = $this->validated('reference_images');
+
+        return array_values($referenceImages);
+    }
+
     /**
      * @return array<string, string>
      */
