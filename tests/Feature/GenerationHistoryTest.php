@@ -44,6 +44,7 @@ it('lists the user\'s Generations newest first with status, Maximum Price, and P
             ->where('generations.1.error', [
                 'code' => 'generation_failed',
                 'message' => "The model couldn't produce an image for this prompt.",
+                'reason' => "The model couldn't produce an image",
             ])
             ->where('generations.2', fn ($row) => collect($row)->only(['id', 'prompt', 'size', 'quality', 'status', 'maxPrice', 'price', 'error'])->all() === [
                 'id' => $succeeded->id,

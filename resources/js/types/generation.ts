@@ -19,7 +19,8 @@ export type Generation = {
     maxPrice: number;
     /** Integer nanodollars, once succeeded. */
     price: number | null;
-    error: { code: string; message: string | null } | null;
+    /** Once failed: the code, Pixelforge's own message, and a plain-language reason to show. */
+    error: { code: string; message: string | null; reason: string } | null;
     createdAt: string;
     /** Where a succeeded Generation's image can be seen; null until succeeded. */
     image: GenerationImage | null;

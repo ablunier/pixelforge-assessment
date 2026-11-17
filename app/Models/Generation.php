@@ -44,6 +44,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string|null $error_code
  * @property string|null $error_message
  * @property string|null $image_path
+ * @property int $submission_attempts
  * @property string|null $provider_image_url
  * @property CarbonImmutable|null $provider_image_url_expires_at
  * @property CarbonImmutable|null $provider_created_at
@@ -78,6 +79,7 @@ class Generation extends Model
             'input_image_tokens' => 'integer',
             'output_tokens' => 'integer',
             'reasoning_tokens' => 'integer',
+            'submission_attempts' => 'integer',
             'provider_cost' => AsMoney::class,
             'price' => AsMoney::class,
             'provider_image_url_expires_at' => 'datetime',

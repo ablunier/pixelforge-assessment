@@ -53,8 +53,9 @@ defineProps<{
                 <p
                     v-else-if="generation.error"
                     class="text-xs text-red-600 dark:text-red-500"
+                    :title="generation.error.message ?? generation.error.code"
                 >
-                    {{ generation.error.message ?? generation.error.code }}
+                    {{ generation.error.reason }}
                 </p>
             </slot>
 
