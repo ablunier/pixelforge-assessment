@@ -25,7 +25,7 @@ services:
             && (grep -q '^APP_KEY=.' .env || php artisan key:generate --no-interaction)
             && php artisan migrate --force
             && npm install && npm run build
-            && php -S 0.0.0.0:8000 -t public public/index.php"
+            && php -S 0.0.0.0:8000 -t public"
         ports:
             - '8000:8000'
         healthcheck:
