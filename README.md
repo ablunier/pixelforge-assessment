@@ -111,7 +111,7 @@ A Laravel 13 + Inertia + Vue 3 (TypeScript) app on Postgres, with a database que
 ## How money is handled
 
 - **Integer nanodollars.** Every amount is a 64-bit count of nanodollars ($1 = 1,000,000,000) behind the `Money` value object. Floats never touch money ([ADR-0001](docs/adr/0001-integer-nanodollars-for-money.md)). Pixelforge's rates are whole nanodollars per token (for example $5.00 per 1M tokens = 5,000), so the Provider Cost is exact.
-- **Markup.** The Price is the Provider Cost × 5/4, exact to the nanodollar at Pixelforge's current rates. Prices display to 4 decimals with the exact value on hover. The recorded Price is exact, never rounded to the cent.
+- **Markup.** The Price is the Provider Cost × 5/4, exact to the nanodollar at Pixelforge's current rates (a future rate that left a remainder would be rounded half up to the nanodollar, see [ADR-0001](docs/adr/0001-integer-nanodollars-for-money.md)). Prices display to 4 decimals with the exact value on hover. The recorded Price is exact, never rounded to the cent.
 - **Locked rates.** The Provider Cost uses the rates Pixelforge locked when it accepted the Generation, not today's rates.
 - **Maximum Price.** It's computed on the server from the most text and reasoning tokens Pixelforge can bill. If Pixelforge locks higher rates than the estimate used, the Price is capped at the Maximum Price and the business absorbs the difference; the Provider Cost is still recorded at the locked rates ([ADR-0004](docs/adr/0004-price-capped-at-maximum-price.md)).
 - **Recorded once.** The Price is written only on the single transition into `succeeded`, under the Generation's row lock, so a duplicate webhook, a poll and the create response racing each other can't record it twice.
@@ -130,7 +130,7 @@ A Laravel 13 + Inertia + Vue 3 (TypeScript) app on Postgres, with a database que
 
 Live at <https://pixelforge.blunier.me>. Every push to `main` is tested and then deployed to the droplet. See [docs/deploy.md](docs/deploy.md) for the stack and the one-time manual setup (DNS, droplet bootstrap, GitHub secrets, the Pixelforge webhook URL).
 
-The reviewer account is created in production with real Generations, one per sandbox keyword, so they match Pixelforge's own records:
+The reviewer account is created in production with real Generations, one per sandbox keyword, so they match Pixelforge's own records. This is a deliberate departure from the spec's "a seeder creates … example Generations": `db:seed` still creates the account in production but skips the made-up examples, whose fake `gen_` ids and Provider Costs would never reconcile against Pixelforge's `GET /v1/usage`.
 
 ```sh
 docker compose -f compose.production.yaml exec -e REVIEWER_EMAIL=<reviewer-email> app php artisan reviewer:create --examples
