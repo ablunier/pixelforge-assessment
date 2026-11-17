@@ -21,3 +21,7 @@ Tests run against Postgres (`testing` database, created by Sail):
 ```sh
 ./vendor/bin/sail composer ci:check
 ```
+
+## Production
+
+Live at <https://pixelforge.blunier.me>. Every push to `main` is tested and then deployed to the droplet; see [docs/deploy.md](docs/deploy.md) for the stack and the one-time manual setup (DNS, droplet bootstrap, GitHub secrets).
