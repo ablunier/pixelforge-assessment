@@ -6,23 +6,6 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Testing\TestResponse;
 use Inertia\Testing\AssertableInertia as Assert;
 
-function fakePixelforgePricing(): void
-{
-    Http::fake([
-        '*/v1/pricing' => Http::response([
-            'object' => 'pricing',
-            'currency' => 'usd',
-            'unit' => 'per_1m_tokens',
-            'rates' => [
-                'input_text_tokens' => '5.00',
-                'input_image_tokens' => '10.00',
-                'output_tokens' => '40.00',
-                'reasoning_tokens' => '12.50',
-            ],
-        ]),
-    ]);
-}
-
 beforeEach(function () {
     config(['services.pixelforge.base_url' => 'https://pixelforge.test/v1']);
 });
