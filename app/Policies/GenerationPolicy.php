@@ -9,6 +9,14 @@ use App\Models\User;
 class GenerationPolicy
 {
     /**
+     * Only a Generation's owner can see it, or its image.
+     */
+    public function view(User $user, Generation $generation): bool
+    {
+        return $generation->user_id === $user->id;
+    }
+
+    /**
      * Try again: only the owner of a failed Generation can.
      */
     public function tryAgain(User $user, Generation $generation): bool

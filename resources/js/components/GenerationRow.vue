@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { Form } from '@inertiajs/vue3';
-import { ImageIcon, RotateCcw } from '@lucide/vue';
+import { RotateCcw } from '@lucide/vue';
 import GenerationController from '@/actions/App/Http/Controllers/GenerationController';
 import GenerationStatusBadge from '@/components/GenerationStatusBadge.vue';
+import GenerationThumbnail from '@/components/GenerationThumbnail.vue';
 import Price from '@/components/Price.vue';
 import { Button } from '@/components/ui/button';
 import type { Generation } from '@/types';
@@ -24,7 +25,7 @@ defineProps<{
             class="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted text-muted-foreground"
         >
             <slot name="thumbnail" :generation="generation">
-                <ImageIcon class="size-5" aria-hidden="true" />
+                <GenerationThumbnail :generation="generation" />
             </slot>
         </div>
 

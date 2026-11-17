@@ -17,6 +17,8 @@ beforeEach(function () {
         'services.pixelforge.api_key' => 'pf_test_key',
         'services.pixelforge.webhook_secret' => WEBHOOK_SECRET,
     ]);
+    // On the docs' timeline, so a succeeded Generation's image URL hasn't expired yet.
+    $this->travelTo('2026-11-04T14:03:00Z');
 });
 
 /**
