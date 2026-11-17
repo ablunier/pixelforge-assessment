@@ -55,6 +55,27 @@ final class GenerationLifecycle
         });
     }
 
+    /**
+     * End a Generation that Pixelforge never accepted (a rejected submission or
+     * exhausted retries) as `failed`, with no Provider Cost or Price. Ignored
+     * if the Generation has already moved on, e.g. through an early webhook.
+     */
+    public function failSubmission(Generation $generation, string $errorCode, ?string $errorMessage): Generation
+    {
+        return DB::transaction(function () use ($generation, $errorCode, $errorMessage): Generation {
+            $generation = Generation::query()->whereKey($generation->getKey())->lockForUpdate()->firstOrFail();
+
+            if ($generation->status->canMoveTo(GenerationStatus::Failed) && $generation->pixelforge_id === null) {
+                $generation->status = GenerationStatus::Failed;
+                $generation->error_code = $errorCode;
+                $generation->error_message = $errorMessage;
+                $generation->save();
+            }
+
+            return $generation;
+        });
+    }
+
     private function recordSuccess(Generation $generation, GenerationSnapshot $snapshot): void
     {
         $lockedRates = $generation->lockedRates();
