@@ -8,7 +8,7 @@ Image-generation app that resells Pixelforge's provider at cost plus markup. See
 docker compose up --build
 ```
 
-Starts the app (http://localhost:8000), a queue worker, the scheduler and Postgres. Copy `.env.example` to `.env` and fill in `PIXELFORGE_BASE_URL`, `PIXELFORGE_API_KEY` and `PIXELFORGE_WEBHOOK_SECRET` to talk to Pixelforge.
+Starts the app (http://localhost:8000), a queue worker, the scheduler and Postgres. The first start creates `.env` from `.env.example`; fill in `PIXELFORGE_BASE_URL`, `PIXELFORGE_API_KEY` and `PIXELFORGE_WEBHOOK_SECRET` to talk to Pixelforge.
 
 ## Tests
 
