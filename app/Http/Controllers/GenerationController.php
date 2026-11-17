@@ -2,17 +2,26 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\CreateGeneration;
 use App\Http\Requests\StoreGenerationRequest;
-use Symfony\Component\HttpFoundation\Response;
+use Illuminate\Http\RedirectResponse;
 
 class GenerationController extends Controller
 {
     /**
-     * Precognitive requests validate the generate form live and never reach
-     * this method. Submitting a Generation arrives with ticket #6.
+     * Generate. Precognitive requests validate the form live and never reach
+     * this method.
      */
-    public function store(StoreGenerationRequest $request): never
+    public function store(StoreGenerationRequest $request, CreateGeneration $createGeneration): RedirectResponse
     {
-        abort(Response::HTTP_NOT_IMPLEMENTED);
+        $createGeneration->handle(
+            $request->user(),
+            $request->prompt(),
+            $request->size(),
+            $request->quality(),
+            $request->referenceImages(),
+        );
+
+        return to_route('dashboard');
     }
 }
