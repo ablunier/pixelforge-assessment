@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 /*
@@ -47,4 +48,24 @@ expect()->extend('toBeOne', function () {
 function something()
 {
     // ..
+}
+
+/**
+ * Fake Pixelforge's GET /v1/pricing with the rates its docs publish.
+ */
+function fakePixelforgePricing(): void
+{
+    Http::fake([
+        '*/v1/pricing' => Http::response([
+            'object' => 'pricing',
+            'currency' => 'usd',
+            'unit' => 'per_1m_tokens',
+            'rates' => [
+                'input_text_tokens' => '5.00',
+                'input_image_tokens' => '10.00',
+                'output_tokens' => '40.00',
+                'reasoning_tokens' => '12.50',
+            ],
+        ]),
+    ]);
 }
