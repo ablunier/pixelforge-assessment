@@ -49,8 +49,8 @@ it('lists the user\'s Generations newest first with status, Maximum Price, and P
             ->where('generations.2', fn ($row) => collect($row)->only(['id', 'prompt', 'size', 'quality', 'status', 'maxPrice', 'price', 'error'])->all() === [
                 'id' => $succeeded->id,
                 'prompt' => 'A lighthouse',
-                'size' => '1024x1024',
-                'quality' => 'medium',
+                'size' => '1536x1024',
+                'quality' => 'high',
                 'status' => 'succeeded',
                 'maxPrice' => 457_150_000,
                 'price' => 381_887_500,

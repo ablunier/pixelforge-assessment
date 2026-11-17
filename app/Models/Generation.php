@@ -45,6 +45,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string|null $error_message
  * @property string|null $image_path
  * @property int $submission_attempts
+ * @property bool $submission_outcome_unknown
  * @property string|null $provider_image_url
  * @property CarbonImmutable|null $provider_image_url_expires_at
  * @property CarbonImmutable|null $provider_created_at
@@ -59,6 +60,9 @@ class Generation extends Model
 {
     /** @use HasFactory<GenerationFactory> */
     use HasFactory, HasUlids;
+
+    /** How many of a user's newest Generations the history shows. */
+    public const int HISTORY_LIMIT = 50;
 
     /**
      * @return array<string, string>
@@ -80,6 +84,7 @@ class Generation extends Model
             'output_tokens' => 'integer',
             'reasoning_tokens' => 'integer',
             'submission_attempts' => 'integer',
+            'submission_outcome_unknown' => 'boolean',
             'provider_cost' => AsMoney::class,
             'price' => AsMoney::class,
             'provider_image_url_expires_at' => 'datetime',
@@ -95,6 +100,17 @@ class Generation extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * The newest Generations, newest first, as the history shows them.
+     *
+     * @param  Builder<self>  $query
+     */
+    #[Scope]
+    protected function history(Builder $query): void
+    {
+        $query->latest()->orderByDesc('id')->limit(self::HISTORY_LIMIT);
     }
 
     /**
@@ -127,6 +143,15 @@ class Generation extends Model
             Money::ofNanodollars($this->output_token_rate),
             Money::ofNanodollars($this->reasoning_token_rate),
         );
+    }
+
+    /**
+     * Whether Pixelforge's signed image URL is known and hasn't expired yet.
+     */
+    public function hasLiveProviderImageUrl(): bool
+    {
+        return $this->provider_image_url !== null
+            && $this->provider_image_url_expires_at?->isFuture() === true;
     }
 
     public function lockRates(Rates $rates): void

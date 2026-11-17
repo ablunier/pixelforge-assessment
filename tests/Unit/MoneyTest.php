@@ -43,8 +43,7 @@ it('adds, subtracts and compares amounts', function () {
         ->and($b->minus($a)->nanodollars())->toBe(-180)
         ->and($a->isGreaterThan($b))->toBeTrue()
         ->and($a->isLessThan($b))->toBeFalse()
-        ->and($a->compareTo($b))->toBe(1)
-        ->and($b->compareTo($a))->toBe(-1)
+        ->and($b->isLessThan($a))->toBeTrue()
         ->and($a->equals(Money::fromDecimal('0.0000003')))->toBeTrue();
 });
 
@@ -52,16 +51,17 @@ it('multiplies by a whole number of units', function () {
     expect(Money::ofNanodollars(12_500)->times(3_184)->nanodollars())->toBe(39_800_000);
 });
 
-it('applies the 25% Markup exactly to the nanodollar', function () {
-    expect(Money::fromDecimal('0.305510000')->withMarkup()->formatExact())->toBe('0.381887500');
-});
-
-it('rounds the Markup half up to the nanodollar when the cost is not divisible by 4', function (int $cost, int $price) {
-    expect(Money::ofNanodollars($cost)->withMarkup()->nanodollars())->toBe($price);
+it('multiplies by a fraction, rounding half up to the nanodollar', function (int $amount, int $expected) {
+    expect(Money::ofNanodollars($amount)->timesFraction(5, 4)->nanodollars())->toBe($expected);
 })->with([
+    [4, 5],
     [1, 1],   // 1.25
     [2, 3],   // 2.5
     [3, 4],   // 3.75
-    [4, 5],
-    [-2, -3],
+    [-2, -3], // -2.5, away from zero
 ]);
+
+it('divides exactly into whole nanodollars, or not at all', function () {
+    expect(Money::fromDecimal('12.50')->dividedExactlyBy(1_000_000)?->nanodollars())->toBe(12_500)
+        ->and(Money::fromDecimal('12.5000001')->dividedExactlyBy(1_000_000))->toBeNull();
+});

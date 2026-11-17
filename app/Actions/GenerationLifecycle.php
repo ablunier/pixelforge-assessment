@@ -5,8 +5,10 @@ namespace App\Actions;
 use App\Enums\GenerationStatus;
 use App\Jobs\StoreGenerationImage;
 use App\Models\Generation;
+use App\Pixelforge\GenerationErrorCode;
 use App\Pixelforge\GenerationSnapshot;
 use App\Pricing\Pricing;
+use Closure;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 
@@ -27,9 +29,7 @@ final class GenerationLifecycle
      */
     public function apply(Generation $generation, GenerationSnapshot $snapshot): Generation
     {
-        return DB::transaction(function () use ($generation, $snapshot): Generation {
-            $generation = Generation::query()->whereKey($generation->getKey())->lockForUpdate()->firstOrFail();
-
+        return $this->underLock($generation, function (Generation $generation) use ($snapshot): void {
             // From whichever source reports them first, e.g. the create response or an early webhook.
             $generation->pixelforge_id ??= $snapshot->pixelforgeId;
 
@@ -49,10 +49,6 @@ final class GenerationLifecycle
                     default => null,
                 };
             }
-
-            $generation->save();
-
-            return $generation;
         });
     }
 
@@ -60,18 +56,33 @@ final class GenerationLifecycle
      * End a Generation that Pixelforge never accepted (a rejected submission or
      * exhausted retries) as `failed`, with no Provider Cost or Price. Ignored
      * if the Generation has already moved on, e.g. through an early webhook.
+     * `$errorCode` is Pixelforge's code as sent (possibly one this app doesn't
+     * know yet) or a GenerationErrorCode.
      */
-    public function failSubmission(Generation $generation, string $errorCode, ?string $errorMessage): Generation
+    public function failSubmission(Generation $generation, GenerationErrorCode|string $errorCode, ?string $errorMessage): Generation
     {
-        return DB::transaction(function () use ($generation, $errorCode, $errorMessage): Generation {
-            $generation = Generation::query()->whereKey($generation->getKey())->lockForUpdate()->firstOrFail();
-
+        return $this->underLock($generation, function (Generation $generation) use ($errorCode, $errorMessage): void {
             if ($generation->status->canMoveTo(GenerationStatus::Failed) && $generation->pixelforge_id === null) {
                 $generation->status = GenerationStatus::Failed;
-                $generation->error_code = $errorCode;
+                $generation->error_code = $errorCode instanceof GenerationErrorCode ? $errorCode->value : $errorCode;
                 $generation->error_message = $errorMessage;
-                $generation->save();
             }
+        });
+    }
+
+    /**
+     * Re-read the Generation under its row lock, let `$change` modify it, and
+     * save it, all in one transaction. Returns the saved Generation.
+     *
+     * @param  Closure(Generation): void  $change
+     */
+    private function underLock(Generation $generation, Closure $change): Generation
+    {
+        return DB::transaction(function () use ($generation, $change): Generation {
+            $generation = Generation::query()->whereKey($generation->getKey())->lockForUpdate()->firstOrFail();
+
+            $change($generation);
+            $generation->save(); // A no-op when nothing changed.
 
             return $generation;
         });
@@ -90,17 +101,20 @@ final class GenerationLifecycle
         $generation->output_tokens = $snapshot->usage->outputTokens;
         $generation->reasoning_tokens = $snapshot->usage->reasoningTokens;
         $generation->provider_cost = Pricing::providerCost($snapshot->usage, $lockedRates);
-        $generation->price = Pricing::price($generation->provider_cost);
+        $generation->price = Pricing::price($generation->provider_cost, $generation->max_price);
         $generation->provider_image_url = $snapshot->imageUrl;
         $generation->provider_image_url_expires_at = $snapshot->imageUrlExpiresAt;
 
-        // Once this transaction commits, so the job sees the succeeded Generation.
-        StoreGenerationImage::dispatch($generation)->afterCommit();
+        // Pixelforge always sends an image URL with a success; without one there's nothing to download.
+        if ($snapshot->imageUrl !== null) {
+            // Once this transaction commits, so the job sees the succeeded Generation.
+            StoreGenerationImage::dispatch($generation)->afterCommit();
+        }
     }
 
     private function recordFailure(Generation $generation, GenerationSnapshot $snapshot): void
     {
-        $generation->error_code = $snapshot->errorCode ?? 'generation_failed';
+        $generation->error_code = $snapshot->errorCode ?? GenerationErrorCode::GenerationFailed->value;
         $generation->error_message = $snapshot->errorMessage;
     }
 }

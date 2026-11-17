@@ -1,11 +1,14 @@
 <?php
 
+use App\Console\Commands\ReconcileGenerations;
 use App\Enums\GenerationStatus;
 use App\Jobs\SubmitGenerationToPixelforge;
 use App\Models\Generation;
 use App\Models\User;
+use App\Pixelforge\PixelforgeError;
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -42,7 +45,7 @@ function pressGenerate(string $prompt = 'A lighthouse on a cliff at dawn, oil pa
 /**
  * Pixelforge answers successive create requests with these responses.
  *
- * @param  list<PromiseInterface>  $responses
+ * @param  list<PromiseInterface|Closure>  $responses
  */
 function fakeCreateResponses(array $responses): void
 {
@@ -160,6 +163,121 @@ it('resends a submission whose response was lost, with the same Idempotency-Key,
         ->and($keys)->toBe([[$generation->id], [$generation->id]]);
 });
 
+function responseLost(): Closure
+{
+    return Http::failedConnection('cURL error 28: Operation timed out');
+}
+
+it('leaves a Generation pending, not failed, when every response was lost, since Pixelforge may hold it', function () {
+    fakeCreateResponses(array_fill(0, 5, responseLost()));
+
+    $generation = pressGenerate();
+
+    expect($generation->status)->toBe(GenerationStatus::Pending)
+        ->and($generation->error_code)->toBeNull()
+        ->and($generation->submission_attempts)->toBe(5)
+        ->and(createRequestsSent())->toBe(5);
+});
+
+it('treats an unexplained server error like a lost response, since Pixelforge may have created the Generation', function () {
+    fakeCreateResponses(array_fill(0, 5, Http::response('<html>504 Gateway Time-out</html>', 504)));
+
+    $generation = pressGenerate();
+
+    expect($generation->status)->toBe(GenerationStatus::Pending)
+        ->and($generation->submission_attempts)->toBe(5)
+        ->and(createRequestsSent())->toBe(5);
+});
+
+it('keeps a Generation pending once a response was lost, even if later attempts are refused as busy', function () {
+    fakeCreateResponses([responseLost(), ...array_fill(0, 4, overloaded())]);
+
+    $generation = pressGenerate();
+
+    expect($generation->status)->toBe(GenerationStatus::Pending)
+        ->and($generation->submission_attempts)->toBe(5);
+});
+
+it('resends a Generation left pending after lost responses from reconciliation, and applies the replay', function () {
+    fakeCreateResponses([...array_fill(0, 5, responseLost()), Http::response(pixelforgeGeneration('queued'), 202, ['Idempotent-Replayed' => 'true'])]);
+    $generation = pressGenerate();
+
+    $this->travel(ReconcileGenerations::PENDING_STALE_AFTER_SECONDS + 1)->seconds();
+    $this->artisan('generations:reconcile')->assertSuccessful();
+
+    expect($generation->refresh()->status)->toBe(GenerationStatus::Queued)
+        ->and($generation->pixelforge_id)->toBe('gen_01JC2Z8Q4N6V0M3H7X5T9R2B1K')
+        ->and(createRequestsSent())->toBe(6);
+});
+
+/**
+ * Let reconciliation resend a stuck `pending` Generation `$times` times.
+ */
+function reconcileResends(int $times): void
+{
+    for ($i = 0; $i < $times; $i++) {
+        test()->travel(ReconcileGenerations::PENDING_STALE_AFTER_SECONDS + 1)->seconds();
+        test()->artisan('generations:reconcile')->assertSuccessful();
+    }
+}
+
+it('fails a Generation whose responses were lost for 20 attempts, with no Price and a readable reason', function () {
+    fakeCreateResponses(array_fill(0, 21, responseLost()));
+    $generation = pressGenerate();
+
+    reconcileResends(16);
+
+    expect($generation->refresh()->status)->toBe(GenerationStatus::Failed)
+        ->and($generation->error_code)->toBe('provider_unreachable')
+        ->and($generation->submission_attempts)->toBe(20)
+        ->and($generation->price)->toBeNull()
+        ->and(createRequestsSent())->toBe(20);
+
+    $this->actingAs($generation->user)
+        ->get(route('dashboard'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('generations.0.error.reason', "Couldn't reach Pixelforge, gave up after 20 attempts"));
+});
+
+function apiKeyRefused(): PromiseInterface
+{
+    return pixelforgeRejects(401, 'authentication_error', 'invalid_api_key', 'Missing or invalid API key.');
+}
+
+it('keeps a Generation pending and reports the problem when Pixelforge refuses the API key, so a fixed key picks it up', function () {
+    Exceptions::fake();
+    fakeCreateResponses([apiKeyRefused(), accepted()]);
+
+    $generation = pressGenerate();
+
+    expect($generation->status)->toBe(GenerationStatus::Pending)
+        ->and($generation->submission_attempts)->toBe(1);
+    Exceptions::assertReported(fn (PixelforgeError $error) => $error->isAuthFailure());
+
+    reconcileResends(1);
+
+    expect($generation->refresh()->status)->toBe(GenerationStatus::Queued);
+});
+
+it('stops resending a Generation after 20 attempts with a refused API key, failing it with a readable reason', function () {
+    Exceptions::fake();
+    fakeCreateResponses(array_fill(0, 21, apiKeyRefused()));
+    $generation = pressGenerate();
+
+    reconcileResends(20);
+
+    expect($generation->refresh()->status)->toBe(GenerationStatus::Failed)
+        ->and($generation->error_code)->toBe('invalid_api_key')
+        ->and($generation->submission_attempts)->toBe(20)
+        ->and($generation->price)->toBeNull()
+        ->and(createRequestsSent())->toBe(20);
+
+    $this->actingAs($generation->user)
+        ->get(route('dashboard'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('generations.0.error.reason', "PixelForge couldn't sign in to its image provider; try again later"));
+});
+
 it('records the Price once when an idempotent replay returns a Generation that already succeeded', function () {
     fakeCreateResponses([
         overloaded(),
@@ -237,7 +355,7 @@ it('explains each failure in plain language in the history', function (string $c
     $user = User::factory()->create();
     Generation::factory()->for($user)->failed()
         ->afterMaking(fn (Generation $generation) => $generation->error_code = $code)
-        ->create();
+        ->create(['submission_attempts' => 5]);
 
     $this->actingAs($user)
         ->get(route('dashboard'))

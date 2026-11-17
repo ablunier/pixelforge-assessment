@@ -59,18 +59,30 @@ final readonly class Money
     }
 
     /**
-     * Add the 25% Markup (×5/4). Exact whenever the amount is divisible by 4,
-     * which holds for every amount priced at today's Pixelforge rates; any
-     * other amount is rounded half up (away from zero) to the nanodollar.
+     * Multiply by `$numerator / $denominator`, e.g. ×5/4 for the Markup. Exact
+     * whenever the result is a whole number of nanodollars; otherwise rounded
+     * half up (away from zero) to the nanodollar (ADR-0001).
      */
-    public function withMarkup(): self
+    public function timesFraction(int $numerator, int $denominator): self
     {
-        return new self(self::divideRoundingHalfUp($this->nanodollars * 5, 4));
+        if ($denominator <= 0) {
+            throw new InvalidArgumentException("Can't multiply by a fraction with denominator {$denominator}.");
+        }
+
+        return new self(self::divideRoundingHalfUp($this->nanodollars * $numerator, $denominator));
     }
 
-    public function compareTo(self $other): int
+    /**
+     * Divide into a whole number of nanodollars, e.g. a per-1M-tokens rate into
+     * a per-token one, or null when the amount doesn't divide evenly.
+     */
+    public function dividedExactlyBy(int $divisor): ?self
     {
-        return $this->nanodollars <=> $other->nanodollars;
+        if ($divisor <= 0) {
+            throw new InvalidArgumentException("Can't divide by {$divisor}.");
+        }
+
+        return $this->nanodollars % $divisor === 0 ? new self(intdiv($this->nanodollars, $divisor)) : null;
     }
 
     public function equals(self $other): bool

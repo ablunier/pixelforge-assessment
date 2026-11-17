@@ -2,20 +2,21 @@
 
 namespace Database\Seeders;
 
+use App\Actions\GenerationLifecycle;
 use App\Console\Commands\CreateReviewer;
-use App\Enums\GenerationErrorCode;
 use App\Enums\GenerationStatus;
 use App\Enums\Quality;
 use App\Enums\Size;
 use App\Models\Generation;
 use App\Models\User;
 use App\Models\WebhookEvent;
+use App\Pixelforge\GenerationErrorCode;
+use App\Pixelforge\GenerationSnapshot;
 use App\Pricing\Pricing;
 use App\Pricing\Rates;
 use App\Pricing\Usage;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Str;
-use LogicException;
 
 /**
  * The reviewer account plus example history for local development, so the
@@ -24,9 +25,10 @@ use LogicException;
  * These Generations are made up (their `gen_` ids exist nowhere), so they're
  * never seeded in production, where every Generation must match Pixelforge's
  * own records: there, `php artisan reviewer:create --examples` submits real
- * ones instead. Money follows the real rules: the Price is the Provider Cost
- * at the locked rates plus the Markup, within the Maximum Price, and
- * failures have neither.
+ * ones instead. Each example is created `pending` and then finished through
+ * GenerationLifecycle with a made-up Pixelforge snapshot, so its status and
+ * money follow the real rules. The snapshots carry no image URL, so no image
+ * download is queued and the history shows the "image expired" placeholder.
  */
 class ReviewerSeeder extends Seeder
 {
@@ -38,7 +40,7 @@ class ReviewerSeeder extends Seeder
         'reasoning_tokens' => '12.50',
     ];
 
-    public function run(): void
+    public function run(GenerationLifecycle $lifecycle): void
     {
         $this->command->call('reviewer:create');
 
@@ -57,71 +59,63 @@ class ReviewerSeeder extends Seeder
         $prompts = CreateReviewer::EXAMPLE_PROMPTS;
 
         // The Pixelforge docs' example usage.
-        $this->succeeded($reviewer, $prompts['[succeed]'], Size::Landscape, Quality::High, ['https://example.com/style.png'], new Usage(12, 765, 6_450, 3_184));
+        $succeeded = $this->pending($reviewer, $prompts['[succeed]'], Size::Landscape, Quality::High, ['https://example.com/style.png']);
+        $lifecycle->apply($succeeded, $this->snapshot($succeeded, GenerationStatus::Succeeded, usage: new Usage(12, 765, 6_450, 3_184)));
 
         // Each Webhook Event arrived twice; the second delivery of each was a no-op.
-        $duplicate = $this->succeeded($reviewer, $prompts['[duplicate]'], Size::Square, Quality::Low, [], new Usage(14, 0, 280, 312));
+        $duplicate = $this->pending($reviewer, $prompts['[duplicate]'], Size::Square, Quality::Low, []);
+        $duplicate = $lifecycle->apply($duplicate, $this->snapshot($duplicate, GenerationStatus::Succeeded, usage: new Usage(14, 0, 280, 312)));
         $this->webhookEventsFor($duplicate);
 
-        $this->failed($reviewer, $prompts['[fail]'], GenerationErrorCode::GenerationFailed, "The model couldn't produce an image for this prompt.", acceptedByPixelforge: true);
-        $this->failed($reviewer, $prompts['[blocked]'], GenerationErrorCode::ContentPolicyViolation, 'This prompt was rejected by our content policy.', acceptedByPixelforge: false);
+        $failed = $this->pending($reviewer, $prompts['[fail]'], Size::Square, Quality::Low, []);
+        $lifecycle->apply($failed, $this->snapshot($failed, GenerationStatus::Failed, error: [GenerationErrorCode::GenerationFailed, "The model couldn't produce an image for this prompt."]));
+
+        $blocked = $this->pending($reviewer, $prompts['[blocked]'], Size::Square, Quality::Low, []);
+        $lifecycle->failSubmission($blocked, GenerationErrorCode::ContentPolicyViolation, 'This prompt was rejected by our content policy.');
     }
 
     /**
+     * A Generation as Generate saves it, after its one create request.
+     *
      * @param  list<string>  $referenceImages
      */
-    private function succeeded(User $reviewer, string $prompt, Size $size, Quality $quality, array $referenceImages, Usage $usage): Generation
+    private function pending(User $reviewer, string $prompt, Size $size, Quality $quality, array $referenceImages): Generation
     {
-        $generation = $this->generation($reviewer, $prompt, $size, $quality, $referenceImages, acceptedByPixelforge: true);
-        $lockedRates = $generation->lockedRates() ?? throw new LogicException('Example rates not locked.');
-
-        $generation->status = GenerationStatus::Succeeded;
-        $generation->input_text_tokens = $usage->inputTextTokens;
-        $generation->input_image_tokens = $usage->inputImageTokens;
-        $generation->output_tokens = $usage->outputTokens;
-        $generation->reasoning_tokens = $usage->reasoningTokens;
-        $generation->provider_cost = Pricing::providerCost($usage, $lockedRates);
-        $generation->price = Pricing::price($generation->provider_cost);
-        $generation->save();
-
-        return $generation;
-    }
-
-    private function failed(User $reviewer, string $prompt, GenerationErrorCode $code, string $message, bool $acceptedByPixelforge): void
-    {
-        $generation = $this->generation($reviewer, $prompt, Size::Square, Quality::Low, [], $acceptedByPixelforge);
-        $generation->status = GenerationStatus::Failed;
-        $generation->error_code = $code->value;
-        $generation->error_message = $message;
-        $generation->save();
-    }
-
-    /**
-     * @param  list<string>  $referenceImages
-     */
-    private function generation(User $reviewer, string $prompt, Size $size, Quality $quality, array $referenceImages, bool $acceptedByPixelforge): Generation
-    {
-        $rates = Rates::fromPixelforge(self::RATES);
-
         $generation = $reviewer->generations()->make([
             'prompt' => $prompt,
             'size' => $size,
             'quality' => $quality,
             'reference_images' => $referenceImages,
             'status' => GenerationStatus::Pending,
-            'max_price' => Pricing::priceRange(mb_strlen($prompt), $size, $quality, count($referenceImages), $rates)->max,
+            'max_price' => Pricing::priceRange(mb_strlen($prompt), $size, $quality, count($referenceImages), Rates::fromPixelforge(self::RATES))->max,
         ]);
-
-        if ($acceptedByPixelforge) {
-            $generation->pixelforge_id = 'gen_'.Str::upper(Str::random(26));
-            $generation->submission_attempts = 1;
-            $generation->lockRates($rates);
-            $generation->provider_created_at = now()->subSeconds(30);
-            $generation->started_at = now()->subSeconds(28);
-            $generation->completed_at = now();
-        }
+        $generation->submission_attempts = 1;
+        $generation->save();
 
         return $generation;
+    }
+
+    /**
+     * What Pixelforge would report for a finished example.
+     *
+     * @param  array{GenerationErrorCode, string}|null  $error
+     */
+    private function snapshot(Generation $generation, GenerationStatus $status, ?Usage $usage = null, ?array $error = null): GenerationSnapshot
+    {
+        return new GenerationSnapshot(
+            pixelforgeId: 'gen_'.Str::upper(Str::random(26)),
+            status: $status,
+            generationId: $generation->id,
+            rates: Rates::fromPixelforge(self::RATES),
+            usage: $usage,
+            errorCode: $error[0]->value ?? null,
+            errorMessage: $error[1] ?? null,
+            imageUrl: null,
+            imageUrlExpiresAt: null,
+            createdAt: now()->subSeconds(30)->toImmutable(),
+            startedAt: now()->subSeconds(28)->toImmutable(),
+            completedAt: now()->toImmutable(),
+        );
     }
 
     private function webhookEventsFor(Generation $generation): void

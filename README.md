@@ -93,7 +93,7 @@ The suite tests at the app's outer edge: Inertia requests, signed webhook POSTs 
 A Laravel 13 + Inertia + Vue 3 (TypeScript) app on Postgres, with a database queue and the scheduler. Pressing Generate never calls Pixelforge inside the request ([ADR-0003](docs/adr/0003-queued-submission-with-pending-status.md)):
 
 1. **Generate** validates the input, computes the Maximum Price on the server, saves the Generation as `pending` and queues its submission.
-2. **The submit job** sends it to Pixelforge with the local id as the `Idempotency-Key` and in `metadata`. It retries rate limits, concurrency waits, overloads and lost responses after `Retry-After` or a capped backoff, and ends permanent rejections and exhausted retries as `failed`.
+2. **The submit job** sends it to Pixelforge with the local id as the `Idempotency-Key` and in `metadata`. It retries rate limits, concurrency waits, overloads, server errors and lost responses after `Retry-After` or a capped backoff, and ends permanent rejections and exhausted retries as `failed`. A Generation Pixelforge may already hold (its response was lost) is never failed early: it stays `pending` for reconciliation to resend, for up to 20 attempts ([ADR-0005](docs/adr/0005-submission-retries-and-giving-up.md)).
 3. **Updates** arrive through signed Webhook Events, the create response, or reconciliation, which every minute polls Generations that went quiet and resubmits `pending` ones whose job died. All three go through the same lifecycle entry point.
 4. **On success** the image is downloaded in a queued job and served from local storage.
 
@@ -111,9 +111,9 @@ A Laravel 13 + Inertia + Vue 3 (TypeScript) app on Postgres, with a database que
 ## How money is handled
 
 - **Integer nanodollars.** Every amount is a 64-bit count of nanodollars ($1 = 1,000,000,000) behind the `Money` value object. Floats never touch money ([ADR-0001](docs/adr/0001-integer-nanodollars-for-money.md)). Pixelforge's rates are whole nanodollars per token (for example $5.00 per 1M tokens = 5,000), so the Provider Cost is exact.
-- **Markup.** The Price is the Provider Cost × 5/4, exact to the nanodollar at Pixelforge's current rates. Prices display to 4 decimals with the exact value on hover. The recorded Price is exact, never rounded to the cent.
+- **Markup.** The Price is the Provider Cost × 5/4, exact to the nanodollar at Pixelforge's current rates (a future rate that left a remainder would be rounded half up to the nanodollar, see [ADR-0001](docs/adr/0001-integer-nanodollars-for-money.md)). Prices display to 4 decimals with the exact value on hover. The recorded Price is exact, never rounded to the cent.
 - **Locked rates.** The Provider Cost uses the rates Pixelforge locked when it accepted the Generation, not today's rates.
-- **Maximum Price.** It's computed on the server from the most text and reasoning tokens Pixelforge can bill, so the final Price never exceeds it.
+- **Maximum Price.** It's computed on the server from the most text and reasoning tokens Pixelforge can bill. If Pixelforge locks higher rates than the estimate used, the Price is capped at the Maximum Price and the business absorbs the difference; the Provider Cost is still recorded at the locked rates ([ADR-0004](docs/adr/0004-price-capped-at-maximum-price.md)).
 - **Recorded once.** The Price is written only on the single transition into `succeeded`, under the Generation's row lock, so a duplicate webhook, a poll and the create response racing each other can't record it twice.
 - **Failures are free.** A failed or rejected Generation has no Provider Cost and no Price.
 
@@ -130,7 +130,7 @@ A Laravel 13 + Inertia + Vue 3 (TypeScript) app on Postgres, with a database que
 
 Live at <https://pixelforge.blunier.me>. Every push to `main` is tested and then deployed to the droplet. See [docs/deploy.md](docs/deploy.md) for the stack and the one-time manual setup (DNS, droplet bootstrap, GitHub secrets, the Pixelforge webhook URL).
 
-The reviewer account is created in production with real Generations, one per sandbox keyword, so they match Pixelforge's own records:
+The reviewer account is created in production with real Generations, one per sandbox keyword, so they match Pixelforge's own records. This is a deliberate departure from the spec's "a seeder creates … example Generations": `db:seed` still creates the account in production but skips the made-up examples, whose fake `gen_` ids and Provider Costs would never reconcile against Pixelforge's `GET /v1/usage`.
 
 ```sh
 docker compose -f compose.production.yaml exec -e REVIEWER_EMAIL=<reviewer-email> app php artisan reviewer:create --examples
@@ -150,7 +150,7 @@ docker compose -f compose.production.yaml exec -e REVIEWER_EMAIL=<reviewer-email
 ## Resources
 
 - [GLOSSARY.md](GLOSSARY.md): the domain language (Generation, Provider Cost, Markup, Price, Maximum Price, ...).
-- [docs/adr](docs/adr): architecture decisions ([0001](docs/adr/0001-integer-nanodollars-for-money.md) integer nanodollars, [0002](docs/adr/0002-hold-then-charge-ledger.md) Hold-then-Charge ledger, [0003](docs/adr/0003-queued-submission-with-pending-status.md) queued submission with a `pending` status).
+- [docs/adr](docs/adr): architecture decisions ([0001](docs/adr/0001-integer-nanodollars-for-money.md) integer nanodollars, [0002](docs/adr/0002-hold-then-charge-ledger.md) Hold-then-Charge ledger, [0003](docs/adr/0003-queued-submission-with-pending-status.md) queued submission with a `pending` status, [0004](docs/adr/0004-price-capped-at-maximum-price.md) Price capped at the Maximum Price, [0005](docs/adr/0005-submission-retries-and-giving-up.md) submission retries and giving up).
 - [docs/deploy.md](docs/deploy.md): production stack and setup.
 - [docs/sandbox-verification.md](docs/sandbox-verification.md): manual checks against the real sandbox.
 - [Pixelforge API reference](https://pixelforge.promptedit.dev/docs).
