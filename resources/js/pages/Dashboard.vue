@@ -30,6 +30,8 @@ const props = defineProps<{
     options: GenerateFormOptions;
     /** The user's Generations, newest first. */
     generations: Generation[];
+    /** Whether any of the user's Generations isn't final, so the history should poll. */
+    pollHistory: boolean;
 }>();
 
 // Guard against the TypeScript mirror drifting from App\Pricing\Pricing.
@@ -73,9 +75,9 @@ if (import.meta.env.DEV) {
         >
             <Heading
                 title="Your Generations"
-                description="Newest first. Reload to see the latest status."
+                description="Newest first. Statuses update live until every Generation is final."
             />
-            <GenerationHistory :generations="generations" />
+            <GenerationHistory :generations="generations" :poll="pollHistory" />
         </section>
     </div>
 </template>
