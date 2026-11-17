@@ -1,0 +1,6 @@
+# Terminates TLS (certificate issued automatically via ACME) and proxies to
+# the app container. The app trusts the X-Forwarded-* headers Caddy sets.
+{$APP_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy app:8080
+}

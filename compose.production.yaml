@@ -1,0 +1,91 @@
+# Production stack for the DigitalOcean droplet. See docs/deploy.md.
+# Reads secrets from ./.env on the droplet (never committed).
+name: pixelforge
+
+x-app: &app
+    image: pixelforge-app:latest
+    env_file: .env
+    environment:
+        APP_ENV: production
+        APP_DEBUG: 'false'
+        DB_CONNECTION: pgsql
+        DB_HOST: pgsql
+        DB_PORT: 5432
+    volumes:
+        - app-storage:/app/storage
+    networks:
+        - internal
+    restart: unless-stopped
+    depends_on:
+        pgsql:
+            condition: service_healthy
+
+services:
+    app:
+        <<: *app
+        build:
+            context: .
+            dockerfile: Dockerfile
+
+    queue:
+        <<: *app
+        pull_policy: never
+        command: php artisan queue:work --tries=3 --max-time=3600 --sleep=1
+        stop_grace_period: 60s
+        healthcheck:
+            disable: true
+
+    scheduler:
+        <<: *app
+        pull_policy: never
+        command: php artisan schedule:work
+        healthcheck:
+            disable: true
+
+    pgsql:
+        image: postgres:18-alpine
+        environment:
+            POSTGRES_DB: ${DB_DATABASE:?set DB_DATABASE in .env}
+            POSTGRES_USER: ${DB_USERNAME:?set DB_USERNAME in .env}
+            POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+        volumes:
+            - pgsql-data:/var/lib/postgresql
+        networks:
+            - internal
+        restart: unless-stopped
+        healthcheck:
+            test:
+                [
+                    'CMD-SHELL',
+                    'pg_isready -q -d "$$POSTGRES_DB" -U "$$POSTGRES_USER"',
+                ]
+            interval: 5s
+            timeout: 5s
+            retries: 10
+
+    caddy:
+        image: caddy:2-alpine
+        ports:
+            - '80:80'
+            - '443:443'
+            - '443:443/udp'
+        environment:
+            APP_DOMAIN: ${APP_DOMAIN:-pixelforge.blunier.me}
+        volumes:
+            - ./docker/production/Caddyfile:/etc/caddy/Caddyfile:ro
+            - caddy-data:/data
+            - caddy-config:/config
+        networks:
+            - internal
+        restart: unless-stopped
+        depends_on:
+            - app
+
+networks:
+    internal:
+
+volumes:
+    pgsql-data:
+    app-storage:
+    caddy-data:
+    caddy-config:
