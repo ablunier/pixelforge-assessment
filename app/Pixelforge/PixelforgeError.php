@@ -38,11 +38,21 @@ final class PixelforgeError extends RuntimeException
     }
 
     /**
-     * A limit or overload: the same request may succeed later.
+     * A limit, an overload or a server error: the same request may succeed later.
      */
     public function isRetryable(): bool
     {
         return in_array($this->errorCode, self::RETRYABLE, true) || $this->httpStatus >= 500;
+    }
+
+    /**
+     * A server error Pixelforge doesn't document, such as a gateway timeout:
+     * like a lost response, the request may still have been carried out.
+     * (`overloaded` is documented to create nothing.)
+     */
+    public function leavesOutcomeUnknown(): bool
+    {
+        return $this->httpStatus >= 500 && ! in_array($this->errorCode, self::RETRYABLE, true);
     }
 
     /**

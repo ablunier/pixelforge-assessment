@@ -41,9 +41,10 @@ class ReconcileGenerations extends Command
     }
 
     /**
-     * Resubmit `pending` Generations whose submit job died (ADR-0003). The
-     * Idempotency-Key is the local id, so a resend that Pixelforge already has
-     * replays it and creates nothing new.
+     * Resubmit `pending` Generations whose submit job died (ADR-0003) or that
+     * the job left for a resend because Pixelforge may already hold them or
+     * refused our API key (ADR-0005). The Idempotency-Key is the local id, so
+     * a resend that Pixelforge already has replays it and creates nothing new.
      */
     private function resubmitStuckPending(): void
     {

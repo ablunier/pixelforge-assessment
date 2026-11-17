@@ -93,7 +93,7 @@ The suite tests at the app's outer edge: Inertia requests, signed webhook POSTs 
 A Laravel 13 + Inertia + Vue 3 (TypeScript) app on Postgres, with a database queue and the scheduler. Pressing Generate never calls Pixelforge inside the request ([ADR-0003](docs/adr/0003-queued-submission-with-pending-status.md)):
 
 1. **Generate** validates the input, computes the Maximum Price on the server, saves the Generation as `pending` and queues its submission.
-2. **The submit job** sends it to Pixelforge with the local id as the `Idempotency-Key` and in `metadata`. It retries rate limits, concurrency waits, overloads and lost responses after `Retry-After` or a capped backoff, and ends permanent rejections and exhausted retries as `failed`.
+2. **The submit job** sends it to Pixelforge with the local id as the `Idempotency-Key` and in `metadata`. It retries rate limits, concurrency waits, overloads, server errors and lost responses after `Retry-After` or a capped backoff, and ends permanent rejections and exhausted retries as `failed`. A Generation Pixelforge may already hold (its response was lost) is never failed early: it stays `pending` for reconciliation to resend, for up to 20 attempts ([ADR-0005](docs/adr/0005-submission-retries-and-giving-up.md)).
 3. **Updates** arrive through signed Webhook Events, the create response, or reconciliation, which every minute polls Generations that went quiet and resubmits `pending` ones whose job died. All three go through the same lifecycle entry point.
 4. **On success** the image is downloaded in a queued job and served from local storage.
 
@@ -150,7 +150,7 @@ docker compose -f compose.production.yaml exec -e REVIEWER_EMAIL=<reviewer-email
 ## Resources
 
 - [GLOSSARY.md](GLOSSARY.md): the domain language (Generation, Provider Cost, Markup, Price, Maximum Price, ...).
-- [docs/adr](docs/adr): architecture decisions ([0001](docs/adr/0001-integer-nanodollars-for-money.md) integer nanodollars, [0002](docs/adr/0002-hold-then-charge-ledger.md) Hold-then-Charge ledger, [0003](docs/adr/0003-queued-submission-with-pending-status.md) queued submission with a `pending` status).
+- [docs/adr](docs/adr): architecture decisions ([0001](docs/adr/0001-integer-nanodollars-for-money.md) integer nanodollars, [0002](docs/adr/0002-hold-then-charge-ledger.md) Hold-then-Charge ledger, [0003](docs/adr/0003-queued-submission-with-pending-status.md) queued submission with a `pending` status, [0004](docs/adr/0004-price-capped-at-maximum-price.md) Price capped at the Maximum Price, [0005](docs/adr/0005-submission-retries-and-giving-up.md) submission retries and giving up).
 - [docs/deploy.md](docs/deploy.md): production stack and setup.
 - [docs/sandbox-verification.md](docs/sandbox-verification.md): manual checks against the real sandbox.
 - [Pixelforge API reference](https://pixelforge.promptedit.dev/docs).
