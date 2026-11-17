@@ -116,6 +116,9 @@ class ReviewerSeeder extends Seeder
             $generation->pixelforge_id = 'gen_'.Str::upper(Str::random(26));
             $generation->submission_attempts = 1;
             $generation->lockRates($rates);
+            $generation->provider_created_at = now()->subSeconds(30);
+            $generation->started_at = now()->subSeconds(28);
+            $generation->completed_at = now();
         }
 
         return $generation;

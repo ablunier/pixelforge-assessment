@@ -110,6 +110,16 @@ Optional variable `DEPLOY_PATH` overrides the checkout path (default `/opt/pixel
 
 Set the production key's webhook URL to `https://pixelforge.blunier.me/webhooks/pixelforge`.
 
+### 5. Reviewer account and sandbox checks
+
+Create the reviewer account and submit one real Generation per sandbox keyword, then work through [sandbox-verification.md](sandbox-verification.md):
+
+```sh
+docker compose -f compose.production.yaml exec -e REVIEWER_EMAIL=<reviewer-email> app php artisan reviewer:create --examples
+```
+
+It prints a generated password once; share it privately with the submission. To choose the password instead, add `REVIEWER_EMAIL` and `REVIEWER_PASSWORD` to `/opt/pixelforge/.env` and recreate the containers. Don't run `db:seed` for this: in production it creates the account but no example Generations, since made-up ones wouldn't match Pixelforge's records.
+
 ## Operating
 
 From `/opt/pixelforge` on the droplet:
