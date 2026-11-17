@@ -43,6 +43,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property Money|null $price
  * @property string|null $error_code
  * @property string|null $error_message
+ * @property string|null $image_path
  * @property string|null $provider_image_url
  * @property CarbonImmutable|null $provider_image_url_expires_at
  * @property CarbonImmutable|null $provider_created_at

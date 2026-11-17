@@ -38,6 +38,16 @@ return [
             'report' => false,
         ],
 
+        // Images of succeeded Generations, kept past Pixelforge's URL expiry.
+        // storage/ is the persistent `app-storage` volume in production.
+        // Never public: served only to each Generation's owner.
+        'generation-images' => [
+            'driver' => 'local',
+            'root' => storage_path('app/private/generation-images'),
+            'throw' => true,
+            'report' => false,
+        ],
+
         'public' => [
             'driver' => 'local',
             'root' => storage_path('app/public'),

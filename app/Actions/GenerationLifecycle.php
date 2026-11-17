@@ -3,6 +3,7 @@
 namespace App\Actions;
 
 use App\Enums\GenerationStatus;
+use App\Jobs\StoreGenerationImage;
 use App\Models\Generation;
 use App\Pixelforge\GenerationSnapshot;
 use App\Pricing\Pricing;
@@ -71,6 +72,9 @@ final class GenerationLifecycle
         $generation->price = Pricing::price($generation->provider_cost);
         $generation->provider_image_url = $snapshot->imageUrl;
         $generation->provider_image_url_expires_at = $snapshot->imageUrlExpiresAt;
+
+        // Once this transaction commits, so the job sees the succeeded Generation.
+        StoreGenerationImage::dispatch($generation)->afterCommit();
     }
 
     private function recordFailure(Generation $generation, GenerationSnapshot $snapshot): void

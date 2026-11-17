@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ImageIcon } from '@lucide/vue';
 import GenerationStatusBadge from '@/components/GenerationStatusBadge.vue';
+import GenerationThumbnail from '@/components/GenerationThumbnail.vue';
 import Price from '@/components/Price.vue';
 import type { Generation } from '@/types';
 
@@ -20,7 +20,7 @@ defineProps<{
             class="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted text-muted-foreground"
         >
             <slot name="thumbnail" :generation="generation">
-                <ImageIcon class="size-5" aria-hidden="true" />
+                <GenerationThumbnail :generation="generation" />
             </slot>
         </div>
 
