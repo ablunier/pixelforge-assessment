@@ -1,9 +1,13 @@
 <?php
 
+use App\Console\Commands\ReconcileGenerations;
 use App\Enums\GenerationStatus;
+use App\Jobs\StoreGenerationImage;
 use App\Models\Generation;
 use App\Models\User;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
 
 beforeEach(function () {
@@ -178,6 +182,61 @@ it('retries a failed download with backoff', function () {
     runQueueWorker();
 
     expect(historyImage($user)['source'])->toBe('stored');
+});
+
+it('downloads the image again later once every try failed, while the image URL still works', function () {
+    $user = User::factory()->create();
+    processingLighthouse($user);
+    fakeLighthouseSucceeds();
+    Http::fake([LIGHTHOUSE_IMAGE_URL => Http::sequence()->dontFailWhenEmpty()
+        ->push('Bad gateway', 502)->push('Bad gateway', 502)->push('Bad gateway', 502)
+        ->push('Bad gateway', 502)->push('Bad gateway', 502)
+        ->push(LIGHTHOUSE_PNG)]);
+    queueJobsForWorker();
+    $this->artisan('generations:reconcile')->assertSuccessful();
+
+    // StoreGenerationImage's own tries, 10 s to 10 min apart, all fail.
+    foreach ([0, 10, 30, 120, 600] as $wait) {
+        $this->travel($wait + 1)->seconds();
+        runQueueWorker();
+    }
+
+    expect(historyImage($user)['source'])->toBe('provider');
+
+    $this->travel(ReconcileGenerations::IMAGE_RETRY_AFTER_MINUTES)->minutes();
+    $this->artisan('generations:reconcile')->assertSuccessful();
+    runQueueWorker();
+
+    expect(historyImage($user)['source'])->toBe('stored');
+});
+
+it('stops downloading the image again once the image URL has expired', function () {
+    $user = User::factory()->create();
+    $generation = processingLighthouse($user);
+    fakeLighthouseSucceeds();
+    queueJobsForWorker();
+    $this->artisan('generations:reconcile')->assertSuccessful();
+    $generation->refresh();
+    Queue::fake();
+
+    $this->travelTo('2026-11-05T14:03:30Z');
+    $this->artisan('generations:reconcile')->assertSuccessful();
+
+    Queue::assertNotPushed(StoreGenerationImage::class);
+});
+
+it('refuses to store a download that isn\'t a PNG', function () {
+    $user = User::factory()->create();
+    processingLighthouse($user);
+    fakeLighthouseSucceeds();
+    Http::fake([LIGHTHOUSE_IMAGE_URL => Http::response('<html>Sign in to continue</html>', 200, ['Content-Type' => 'text/html'])]);
+    queueJobsForWorker();
+    $this->artisan('generations:reconcile')->assertSuccessful();
+
+    runQueueWorker();
+
+    expect(historyImage($user)['source'])->toBe('provider')
+        ->and(Storage::disk(StoreGenerationImage::DISK)->allFiles())->toBe([]);
 });
 
 it('fetches a fresh signed URL from Pixelforge when the stored one has expired', function () {

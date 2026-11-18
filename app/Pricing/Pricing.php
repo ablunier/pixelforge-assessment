@@ -23,26 +23,6 @@ final class Pricing
 
     public const int TOKENS_PER_REFERENCE_IMAGE = 765;
 
-    /**
-     * Per quality: the output tokens for each size and the reasoning token range.
-     *
-     * @var array<string, array{output: array<string, int>, reasoning: array{min: int, max: int}}>
-     */
-    private const array TOKENS_BY_QUALITY = [
-        'low' => [
-            'output' => ['1024x1024' => 280, '1536x1024' => 420, '1024x1536' => 420],
-            'reasoning' => ['min' => 0, 'max' => 500],
-        ],
-        'medium' => [
-            'output' => ['1024x1024' => 1_100, '1536x1024' => 1_650, '1024x1536' => 1_650],
-            'reasoning' => ['min' => 200, 'max' => 2_000],
-        ],
-        'high' => [
-            'output' => ['1024x1024' => 4_300, '1536x1024' => 6_450, '1024x1536' => 6_450],
-            'reasoning' => ['min' => 1_000, 'max' => 8_000],
-        ],
-    ];
-
     /** The Markup: Price = Provider Cost × 5/4. */
     private const int MARKUP_NUMERATOR = 5;
 
@@ -55,18 +35,18 @@ final class Pricing
     public static function priceRange(int $promptLength, Size $size, Quality $quality, int $referenceImageCount, Rates $rates): PriceRange
     {
         $estimatedTextTokens = self::ceilDiv($promptLength, self::CHARACTERS_PER_TEXT_TOKEN);
-        $tokens = self::TOKENS_BY_QUALITY[$quality->value];
+        $reasoningTokens = self::reasoningTokens($quality);
 
         $fixed = $rates->inputImageToken->times($referenceImageCount * self::TOKENS_PER_REFERENCE_IMAGE)
-            ->plus($rates->outputToken->times($tokens['output'][$size->value]));
+            ->plus($rates->outputToken->times(self::outputTokens($quality, $size)));
 
         $minCost = $fixed
             ->plus($rates->inputTextToken->times(intdiv($estimatedTextTokens * (100 - self::TEXT_TOKEN_VARIANCE_PERCENT), 100)))
-            ->plus($rates->reasoningToken->times($tokens['reasoning']['min']));
+            ->plus($rates->reasoningToken->times($reasoningTokens['min']));
 
         $maxCost = $fixed
             ->plus($rates->inputTextToken->times(self::ceilDiv($estimatedTextTokens * (100 + self::TEXT_TOKEN_VARIANCE_PERCENT), 100)))
-            ->plus($rates->reasoningToken->times($tokens['reasoning']['max']));
+            ->plus($rates->reasoningToken->times($reasoningTokens['max']));
 
         return new PriceRange(self::withMarkup($minCost), self::withMarkup($maxCost));
     }
@@ -121,9 +101,72 @@ final class Pricing
             'characters_per_text_token' => self::CHARACTERS_PER_TEXT_TOKEN,
             'text_token_variance_percent' => self::TEXT_TOKEN_VARIANCE_PERCENT,
             'per_reference_image' => self::TOKENS_PER_REFERENCE_IMAGE,
-            'output' => array_map(fn (array $tokens): array => $tokens['output'], self::TOKENS_BY_QUALITY),
-            'reasoning' => array_map(fn (array $tokens): array => $tokens['reasoning'], self::TOKENS_BY_QUALITY),
+            'output' => self::byQuality(fn (Quality $quality): array => self::bySize(
+                fn (Size $size): int => self::outputTokens($quality, $size),
+            )),
+            'reasoning' => self::byQuality(fn (Quality $quality): array => self::reasoningTokens($quality)),
         ];
+    }
+
+    /**
+     * The Markup as a fraction of the Provider Cost, for the display-only
+     * TypeScript mirror of priceRange().
+     *
+     * @return array{numerator: int, denominator: int}
+     */
+    public static function markup(): array
+    {
+        return ['numerator' => self::MARKUP_NUMERATOR, 'denominator' => self::MARKUP_DENOMINATOR];
+    }
+
+    /**
+     * Output tokens are fixed per quality and size; landscape and portrait cost the same.
+     */
+    private static function outputTokens(Quality $quality, Size $size): int
+    {
+        $square = $size === Size::Square;
+
+        return match ($quality) {
+            Quality::Low => $square ? 280 : 420,
+            Quality::Medium => $square ? 1_100 : 1_650,
+            Quality::High => $square ? 4_300 : 6_450,
+        };
+    }
+
+    /**
+     * The range reasoning tokens fall within, per quality.
+     *
+     * @return array{min: int, max: int}
+     */
+    private static function reasoningTokens(Quality $quality): array
+    {
+        return match ($quality) {
+            Quality::Low => ['min' => 0, 'max' => 500],
+            Quality::Medium => ['min' => 200, 'max' => 2_000],
+            Quality::High => ['min' => 1_000, 'max' => 8_000],
+        };
+    }
+
+    /**
+     * @template T
+     *
+     * @param  callable(Quality): T  $value
+     * @return array<string, T>
+     */
+    private static function byQuality(callable $value): array
+    {
+        return array_combine(array_column(Quality::cases(), 'value'), array_map($value, Quality::cases()));
+    }
+
+    /**
+     * @template T
+     *
+     * @param  callable(Size): T  $value
+     * @return array<string, T>
+     */
+    private static function bySize(callable $value): array
+    {
+        return array_combine(array_column(Size::cases(), 'value'), array_map($value, Size::cases()));
     }
 
     /**

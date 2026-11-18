@@ -4,6 +4,7 @@ import { RotateCcw } from '@lucide/vue';
 import GenerationController from '@/actions/App/Http/Controllers/GenerationController';
 import GenerationStatusBadge from '@/components/GenerationStatusBadge.vue';
 import GenerationThumbnail from '@/components/GenerationThumbnail.vue';
+import InputError from '@/components/InputError.vue';
 import Price from '@/components/Price.vue';
 import { Button } from '@/components/ui/button';
 import type { Generation } from '@/types';
@@ -67,7 +68,8 @@ defineProps<{
                     <Form
                         v-bind="GenerationController.tryAgain.form(generation)"
                         :options="{ preserveScroll: true }"
-                        v-slot="{ processing }"
+                        class="grid gap-1"
+                        v-slot="{ processing, errors }"
                     >
                         <Button
                             type="submit"
@@ -78,6 +80,7 @@ defineProps<{
                             <RotateCcw aria-hidden="true" />
                             Try again
                         </Button>
+                        <InputError :message="errors.generate" />
                     </Form>
                 </slot>
             </div>

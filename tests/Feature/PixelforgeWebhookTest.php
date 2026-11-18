@@ -117,6 +117,29 @@ it('rejects a Webhook Event whose body was changed after signing', function () {
     });
 });
 
+it('accepts a Webhook Event whose signature header carries several v1 values, one of them valid', function () {
+    $generation = Generation::factory()->accepted()->create();
+    $event = webhookEvent('generation.processing', pixelforgeGenerationFor($generation, 'processing'));
+    $timestamp = now()->getTimestamp();
+    $body = json_encode($event, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
+    $valid = hash_hmac('sha256', "{$timestamp}.{$body}", WEBHOOK_SECRET);
+    $retired = hash_hmac('sha256', "{$timestamp}.{$body}", 'whsec_retired');
+
+    deliverWebhook($event, signature: "t={$timestamp},v1={$retired},v1={$valid}")->assertOk();
+
+    expect($generation->refresh()->status)->toBe(GenerationStatus::Processing);
+});
+
+it('rejects a Webhook Event whose signature header carries several v1 values, none of them valid', function () {
+    expectWebhookRejected(function (array $event) {
+        $timestamp = now()->getTimestamp();
+        $body = json_encode($event, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
+        $forged = fn (string $secret) => hash_hmac('sha256', "{$timestamp}.{$body}", $secret);
+
+        return deliverWebhook($event, signature: "t={$timestamp},v1={$forged('whsec_a')},v1={$forged('whsec_b')}");
+    });
+});
+
 it('rejects a Webhook Event signed more than 300 seconds ago', function () {
     expectWebhookRejected(fn (array $event) => deliverWebhook($event, timestamp: now()->getTimestamp() - 301));
 });

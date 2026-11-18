@@ -19,7 +19,8 @@ import { priceRange, promptLength } from '@/lib/pricing';
 import type { GenerateFormOptions, PricingData, Quality, Size } from '@/types';
 
 const props = defineProps<{
-    pricing: PricingData;
+    /** Null while Pixelforge's rates can't be had. */
+    pricing: PricingData | null;
     options: GenerateFormOptions;
 }>();
 
@@ -51,13 +52,15 @@ const form = useForm(GenerationController.store(), {
 const characters = computed(() => promptLength(form.prompt));
 
 const range = computed(() =>
-    priceRange(
-        characters.value,
-        form.size,
-        form.quality,
-        form.reference_images.length,
-        props.pricing,
-    ),
+    props.pricing === null
+        ? null
+        : priceRange(
+              characters.value,
+              form.size,
+              form.quality,
+              form.reference_images.length,
+              props.pricing,
+          ),
 );
 
 function isHttpUrl(value: string): boolean {
@@ -291,7 +294,14 @@ function submit(): void {
         <div
             class="flex flex-col gap-4 border-t pt-6 sm:flex-row sm:items-end sm:justify-between"
         >
-            <div aria-live="polite">
+            <div v-if="range === null" aria-live="polite">
+                <p class="text-sm text-muted-foreground">Maximum Price</p>
+                <p class="mt-1 text-sm text-muted-foreground">
+                    Prices can't be loaded right now. Reload the page in a
+                    minute to generate.
+                </p>
+            </div>
+            <div v-else aria-live="polite">
                 <p class="text-sm text-muted-foreground">Maximum Price</p>
                 <p class="text-3xl font-semibold">
                     <Price :nanodollars="range.max" />
@@ -306,11 +316,15 @@ function submit(): void {
                 <Button
                     type="submit"
                     :disabled="
-                        hasClientErrors || form.validating || form.processing
+                        range === null ||
+                        hasClientErrors ||
+                        form.validating ||
+                        form.processing
                     "
                 >
                     Generate
                 </Button>
+                <InputError :message="errorFor('generate')" />
             </div>
         </div>
     </form>

@@ -9,7 +9,9 @@ use App\Jobs\SubmitGenerationToPixelforge;
 use App\Models\Generation;
 use App\Models\User;
 use App\Pixelforge\PixelforgeClient;
+use App\Pixelforge\PricingUnavailable;
 use App\Pricing\Pricing;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Generate: save the Generation locally as `pending` with its Maximum Price,
@@ -21,10 +23,22 @@ final readonly class CreateGeneration
 
     /**
      * @param  list<string>  $referenceImages
+     *
+     * @throws ValidationException under `generate` when there are no rates to price it with
      */
     public function handle(User $user, string $prompt, Size $size, Quality $quality, array $referenceImages): Generation
     {
-        $priceRange = Pricing::priceRange(mb_strlen($prompt), $size, $quality, count($referenceImages), $this->pixelforge->rates());
+        try {
+            $rates = $this->pixelforge->rates();
+        } catch (PricingUnavailable $exception) {
+            report($exception);
+
+            throw ValidationException::withMessages([
+                'generate' => "Prices can't be loaded right now, so nothing was submitted. Try again in a minute.",
+            ]);
+        }
+
+        $priceRange = Pricing::priceRange(mb_strlen($prompt), $size, $quality, count($referenceImages), $rates);
 
         $generation = $user->generations()->create([
             'prompt' => $prompt,
