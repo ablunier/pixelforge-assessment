@@ -269,3 +269,15 @@ it('renews a Generation\'s lease while it waits its turn at the concurrency limi
     expect($generation->refresh()->updated_at?->equalTo(now()))->toBeTrue()
         ->and($generation->submission_attempts)->toBe(0);
 });
+
+it('queues the retry Pixelforge asks for, after the delay the submission rules decide', function () {
+    Queue::fake();
+    fakeCreateResponses([pixelforgeRejects(429, 'rate_limit_error', 'rate_limit_exceeded', 'Too many requests.', ['Retry-After' => '12'])]);
+    $generation = Generation::factory()->create();
+
+    app()->call([new SubmitGenerationToPixelforge($generation), 'handle']);
+
+    Queue::assertPushed(SubmitGenerationToPixelforge::class, fn (SubmitGenerationToPixelforge $job) => $job->delay === 12
+        && $job->generation->is($generation));
+    expect($generation->refresh()->submission_attempts)->toBe(1);
+});

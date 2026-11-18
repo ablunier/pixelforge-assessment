@@ -33,7 +33,7 @@ final class SubmissionRules
      * ReconcileGenerations::PENDING_STALE_AFTER_SECONDS. A retry that comes
      * too early is only refused again.
      */
-    public const int MAX_RETRY_DELAY_SECONDS = 60;
+    private const int MAX_RETRY_DELAY_SECONDS = 60;
 
     /**
      * How long after Generate concurrency-limit refusals don't count as
@@ -41,7 +41,7 @@ final class SubmissionRules
      * one can take 90 s or more, so those refusals mean "not yet" (story 13);
      * past this they count, so nothing waits forever.
      */
-    public const int MAX_CONCURRENCY_WAIT_MINUTES = 15;
+    private const int MAX_CONCURRENCY_WAIT_MINUTES = 15;
 
     /**
      * @param  int  $attempts  Create requests the Generation had before this one.

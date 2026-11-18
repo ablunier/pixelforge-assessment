@@ -143,9 +143,17 @@ it('decides what each answer to a create request means (ADR-0005)', function (Cl
         fn () => decide(keyRefused(), attemptsSoFar: 19),
         new Decision(20, false, new Fail('invalid_api_key', 'Missing or invalid API key.')),
     ],
+    'refused key after a lost response keeps the unknown outcome' => [
+        fn () => decide(keyRefused(), attemptsSoFar: 2, outcomeUnknown: true),
+        new Decision(3, true, new AwaitResend),
+    ],
 
     'permanent fails at once with Pixelforge\'s code' => [
         fn () => decide(Answer::refused(Refusal::Permanent, 'content_policy_violation', 'Blocked by content policy.'), attemptsSoFar: 0),
         new Decision(1, false, new Fail('content_policy_violation', 'Blocked by content policy.')),
+    ],
+    'permanent after a lost response keeps the unknown outcome' => [
+        fn () => decide(Answer::refused(Refusal::Permanent, 'validation_failed', 'Invalid size.'), attemptsSoFar: 1, outcomeUnknown: true),
+        new Decision(2, true, new Fail('validation_failed', 'Invalid size.')),
     ],
 ]);
