@@ -2,14 +2,20 @@
 
 namespace App\Http\Requests;
 
+use App\Concerns\GenerationLimits;
 use App\Enums\Quality;
 use App\Enums\Size;
+use App\Models\User;
+use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class StoreGenerationRequest extends FormRequest
 {
+    use GenerationLimits;
+
     /** Pixelforge's prompt limit, in Unicode characters. */
     public const int MAX_PROMPT_LENGTH = 4_000;
 
@@ -27,6 +33,17 @@ class StoreGenerationRequest extends FormRequest
             'reference_images' => ['present', 'array', 'max:'.self::MAX_REFERENCE_IMAGES],
             'reference_images.*' => ['required', 'string', 'max:2048', 'url:http,https'],
         ];
+    }
+
+    /**
+     * @return list<Closure(Validator): void>
+     */
+    public function after(): array
+    {
+        /** @var User $user */
+        $user = $this->user();
+
+        return $this->generationLimits($user);
     }
 
     public function prompt(): string

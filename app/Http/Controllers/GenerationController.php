@@ -4,9 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Actions\CreateGeneration;
 use App\Http\Requests\StoreGenerationRequest;
+use App\Http\Requests\TryAgainRequest;
 use App\Models\Generation;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
 
 class GenerationController extends Controller
 {
@@ -31,7 +31,7 @@ class GenerationController extends Controller
      * Try again: a new Generation with the failed one's parameters, through
      * the same submission path as Generate. The failed one stays as it is.
      */
-    public function tryAgain(Request $request, Generation $generation, CreateGeneration $createGeneration): RedirectResponse
+    public function tryAgain(TryAgainRequest $request, Generation $generation, CreateGeneration $createGeneration): RedirectResponse
     {
         $createGeneration->handle(
             $request->user(),
