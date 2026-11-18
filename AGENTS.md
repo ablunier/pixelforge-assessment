@@ -8,26 +8,26 @@
 
 PHP tests need the Sail stack running (`docker compose up`): they use the Sail Postgres `testing` database.
 
-| Task                   | Command                                            |
-| ---------------------- | -------------------------------------------------- |
-| Test file              | `./vendor/bin/sail artisan test tests/Feature/X.php` |
-| Test by name           | `./vendor/bin/sail artisan test --filter='name'`   |
-| Format PHP file        | `vendor/bin/pint path/to/File.php`                 |
-| PHP static analysis    | `composer types:check`                             |
-| Frontend lint/format   | `npm run check` (`npm run check:fix` to fix)       |
-| Frontend types         | `npm run types:check`                              |
-| Full CI (before a PR)  | `./vendor/bin/sail composer ci:check`              |
+| Task                  | Command                                              |
+| --------------------- | ---------------------------------------------------- |
+| Test file             | `./vendor/bin/sail artisan test tests/Feature/X.php` |
+| Test by name          | `./vendor/bin/sail artisan test --filter='name'`     |
+| Format PHP file       | `vendor/bin/pint path/to/File.php`                   |
+| PHP static analysis   | `composer types:check`                               |
+| Frontend lint/format  | `npm run check` (`npm run check:fix` to fix)         |
+| Frontend types        | `npm run types:check`                                |
+| Full CI (before a PR) | `./vendor/bin/sail composer ci:check`                |
 
 ## External References
 
-| Need                                         | File                             |
-| -------------------------------------------- | -------------------------------- |
+| Need                                         | File                              |
+| -------------------------------------------- | --------------------------------- |
 | Coding, testing and architecture standards   | `.sandcastle/CODING_STANDARDS.md` |
-| Domain terms (use them in names)             | `GLOSSARY.md`                    |
-| Architecture decisions                       | `docs/adr/`                      |
-| Local setup, architecture overview           | `README.md`                      |
-| Deployment                                   | `docs/deploy.md`                 |
-| Manual checks against the Pixelforge sandbox | `docs/sandbox-verification.md`   |
+| Domain terms (use them in names)             | `GLOSSARY.md`                     |
+| Architecture decisions                       | `docs/adr/`                       |
+| Local setup, architecture overview           | `README.md`                       |
+| Deployment                                   | `docs/deploy.md`                  |
+| Manual checks against the Pixelforge sandbox | `docs/sandbox-verification.md`    |
 
 ## Key Conventions
 
