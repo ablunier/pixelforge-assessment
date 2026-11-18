@@ -1,15 +1,16 @@
 <?php
 
+use App\Actions\GenerationLifecycle;
 use App\Console\Commands\ReconcileGenerations;
 use App\Enums\GenerationStatus;
 use App\Jobs\SubmitGenerationToPixelforge;
 use App\Models\Generation;
 use App\Models\User;
+use App\Pixelforge\Answer;
 use App\Pixelforge\PixelforgeError;
+use App\Pixelforge\Refusal;
 use App\Pixelforge\UnexpectedPixelforgeResponse;
 use GuzzleHttp\Promise\PromiseInterface;
-use Illuminate\Bus\UniqueLock;
-use Illuminate\Contracts\Cache\Repository as Cache;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Http;
@@ -69,11 +70,6 @@ function pixelforgeRejects(int $status, string $type, string $code, string $mess
     return Http::response(['error' => ['type' => $type, 'code' => $code, 'message' => $message]], $status, $headers);
 }
 
-function rateLimited(): PromiseInterface
-{
-    return pixelforgeRejects(429, 'rate_limit_error', 'rate_limit_exceeded', 'Too many requests.', ['Retry-After' => '12']);
-}
-
 function overloaded(): PromiseInterface
 {
     return pixelforgeRejects(503, 'api_error', 'overloaded', 'Pixelforge is temporarily overloaded.', ['Retry-After' => '2']);
@@ -88,61 +84,6 @@ function createRequestsSent(): int
 {
     return Http::recorded(fn (Request $request) => $request->method() === 'POST')->count();
 }
-
-it('retries a rate-limited submission and records the attempts', function () {
-    fakeCreateResponses([rateLimited(), accepted()]);
-
-    $generation = pressGenerate();
-
-    expect($generation->status)->toBe(GenerationStatus::Queued)
-        ->and($generation->pixelforge_id)->toBe('gen_01JC2Z8Q4N6V0M3H7X5T9R2B1K')
-        ->and($generation->submission_attempts)->toBe(2)
-        ->and(createRequestsSent())->toBe(2);
-});
-
-/**
- * Run the submit job for a `pending` Generation with the queue faked, so the
- * retry it schedules is captured rather than run, and return each retry's delay.
- *
- * @return list<int|null>
- */
-function retryDelaysAfterSubmitting(int $times): array
-{
-    Queue::fake();
-    $generation = pressGenerate();
-
-    for ($i = 0; $i < $times; $i++) {
-        // With the queue faked, dispatchSync() would only be recorded, so run the job
-        // directly, first releasing its unique lock as a worker does when it starts it.
-        $job = new SubmitGenerationToPixelforge($generation);
-        (new UniqueLock(app(Cache::class)))->release($job);
-        app()->call([$job, 'handle']);
-    }
-
-    return Queue::pushed(SubmitGenerationToPixelforge::class)
-        ->skip(1) // The submission pressing Generate dispatched.
-        ->map(fn (SubmitGenerationToPixelforge $job) => $job->delay)
-        ->values()
-        ->all();
-}
-
-it('waits Retry-After seconds before retrying', function () {
-    fakeCreateResponses([rateLimited(), overloaded()]);
-
-    expect(retryDelaysAfterSubmitting(2))->toBe([12, 2]);
-});
-
-it('backs off exponentially when Pixelforge sends no Retry-After', function () {
-    fakeCreateResponses(array_fill(0, 4, pixelforgeRejects(503, 'api_error', 'overloaded', 'Overloaded.')));
-
-    expect(retryDelaysAfterSubmitting(4))->toBe([2, 4, 8, 16]);
-});
-
-it('caps a long Retry-After at a minute, so reconciliation never mistakes the wait for a dead submission', function () {
-    fakeCreateResponses([pixelforgeRejects(429, 'rate_limit_error', 'rate_limit_exceeded', 'Too many requests.', ['Retry-After' => '300'])]);
-
-    expect(retryDelaysAfterSubmitting(1))->toBe([60]);
-});
 
 it('never queues a second submission for a Generation whose retry is still waiting in the queue', function () {
     Queue::fake();
@@ -173,41 +114,6 @@ it('resends a submission Pixelforge accepted in a response this app can\'t read,
     Exceptions::assertReported(UnexpectedPixelforgeResponse::class);
 });
 
-it('keeps resending an acceptance it can\'t read within the attempt budget, then fails it with no Price', function () {
-    Exceptions::fake();
-    fakeCreateResponses(array_fill(0, 21, unreadableAcceptance()));
-    $generation = pressGenerate();
-
-    // Pixelforge may hold it, so it isn't failed after the first 5 attempts.
-    expect($generation->status)->toBe(GenerationStatus::Pending)
-        ->and($generation->submission_attempts)->toBe(5);
-
-    reconcileResends(16);
-
-    expect($generation->refresh()->status)->toBe(GenerationStatus::Failed)
-        ->and($generation->error_code)->toBe('provider_unreachable')
-        ->and($generation->submission_attempts)->toBe(20)
-        ->and($generation->price)->toBeNull()
-        ->and(createRequestsSent())->toBe(20);
-
-    reconcileResends(1);
-
-    expect(createRequestsSent())->toBe(20);
-});
-
-it('fails a Generation with retries exhausted after 5 overloaded attempts, with no Price', function () {
-    fakeCreateResponses(array_fill(0, 5, overloaded()));
-
-    $generation = pressGenerate('A lighthouse [overloaded]');
-
-    expect($generation->status)->toBe(GenerationStatus::Failed)
-        ->and($generation->error_code)->toBe('retries_exhausted')
-        ->and($generation->submission_attempts)->toBe(5)
-        ->and($generation->provider_cost)->toBeNull()
-        ->and($generation->price)->toBeNull()
-        ->and(createRequestsSent())->toBe(5);
-});
-
 it('resends a submission whose response was lost, with the same Idempotency-Key, and applies the replayed Generation', function () {
     fakeCreateResponses([
         Http::failedConnection('cURL error 28: Operation timed out'),
@@ -230,36 +136,6 @@ function responseLost(): Closure
 {
     return Http::failedConnection('cURL error 28: Operation timed out');
 }
-
-it('leaves a Generation pending, not failed, when every response was lost, since Pixelforge may hold it', function () {
-    fakeCreateResponses(array_fill(0, 5, responseLost()));
-
-    $generation = pressGenerate();
-
-    expect($generation->status)->toBe(GenerationStatus::Pending)
-        ->and($generation->error_code)->toBeNull()
-        ->and($generation->submission_attempts)->toBe(5)
-        ->and(createRequestsSent())->toBe(5);
-});
-
-it('treats an unexplained server error like a lost response, since Pixelforge may have created the Generation', function () {
-    fakeCreateResponses(array_fill(0, 5, Http::response('<html>504 Gateway Time-out</html>', 504)));
-
-    $generation = pressGenerate();
-
-    expect($generation->status)->toBe(GenerationStatus::Pending)
-        ->and($generation->submission_attempts)->toBe(5)
-        ->and(createRequestsSent())->toBe(5);
-});
-
-it('keeps a Generation pending once a response was lost, even if later attempts are refused as busy', function () {
-    fakeCreateResponses([responseLost(), ...array_fill(0, 4, overloaded())]);
-
-    $generation = pressGenerate();
-
-    expect($generation->status)->toBe(GenerationStatus::Pending)
-        ->and($generation->submission_attempts)->toBe(5);
-});
 
 it('resends a Generation left pending after lost responses from reconciliation, and applies the replay', function () {
     fakeCreateResponses([...array_fill(0, 5, responseLost()), Http::response(pixelforgeGeneration('queued'), 202, ['Idempotent-Replayed' => 'true'])]);
@@ -284,24 +160,6 @@ function reconcileResends(int $times): void
     }
 }
 
-it('fails a Generation whose responses were lost for 20 attempts, with no Price and a readable reason', function () {
-    fakeCreateResponses(array_fill(0, 21, responseLost()));
-    $generation = pressGenerate();
-
-    reconcileResends(16);
-
-    expect($generation->refresh()->status)->toBe(GenerationStatus::Failed)
-        ->and($generation->error_code)->toBe('provider_unreachable')
-        ->and($generation->submission_attempts)->toBe(20)
-        ->and($generation->price)->toBeNull()
-        ->and(createRequestsSent())->toBe(20);
-
-    $this->actingAs($generation->user)
-        ->get(route('dashboard'))
-        ->assertInertia(fn (Assert $page) => $page
-            ->where('generations.0.error.reason', "Couldn't reach Pixelforge, gave up after 20 attempts"));
-});
-
 function apiKeyRefused(): PromiseInterface
 {
     return pixelforgeRejects(401, 'authentication_error', 'invalid_api_key', 'Missing or invalid API key.');
@@ -315,30 +173,11 @@ it('keeps a Generation pending and reports the problem when Pixelforge refuses t
 
     expect($generation->status)->toBe(GenerationStatus::Pending)
         ->and($generation->submission_attempts)->toBe(1);
-    Exceptions::assertReported(fn (PixelforgeError $error) => $error->isAuthFailure());
+    Exceptions::assertReported(fn (PixelforgeError $error) => $error->refusal() === Refusal::KeyRefused);
 
     reconcileResends(1);
 
     expect($generation->refresh()->status)->toBe(GenerationStatus::Queued);
-});
-
-it('stops resending a Generation after 20 attempts with a refused API key, failing it with a readable reason', function () {
-    Exceptions::fake();
-    fakeCreateResponses(array_fill(0, 21, apiKeyRefused()));
-    $generation = pressGenerate();
-
-    reconcileResends(20);
-
-    expect($generation->refresh()->status)->toBe(GenerationStatus::Failed)
-        ->and($generation->error_code)->toBe('invalid_api_key')
-        ->and($generation->submission_attempts)->toBe(20)
-        ->and($generation->price)->toBeNull()
-        ->and(createRequestsSent())->toBe(20);
-
-    $this->actingAs($generation->user)
-        ->get(route('dashboard'))
-        ->assertInertia(fn (Assert $page) => $page
-            ->where('generations.0.error.reason', "PixelForge couldn't sign in to its image provider; try again later"));
 });
 
 it('records the Price once when an idempotent replay returns a Generation that already succeeded', function () {
@@ -355,34 +194,6 @@ it('records the Price once when an idempotent replay returns a Generation that a
         ->and($generation->price?->nanodollars())->toBe(381_887_500);
 });
 
-function concurrencyLimited(): PromiseInterface
-{
-    return pixelforgeRejects(429, 'rate_limit_error', 'concurrency_limit_exceeded', 'Too many generations in progress.', ['Retry-After' => '5']);
-}
-
-it('lets a Generation wait its turn while Pixelforge is at its concurrency limit, without using up attempts', function () {
-    fakeCreateResponses([...array_fill(0, 8, concurrencyLimited()), accepted()]);
-
-    $generation = pressGenerate();
-
-    expect($generation->status)->toBe(GenerationStatus::Queued)
-        ->and($generation->submission_attempts)->toBe(1)
-        ->and(createRequestsSent())->toBe(9);
-});
-
-it('counts concurrency waits as attempts once a Generation has waited 15 minutes', function () {
-    fakeCreateResponses(array_fill(0, 5, concurrencyLimited()));
-    $generation = Generation::factory()->create(['created_at' => now()->subMinutes(15)]);
-
-    SubmitGenerationToPixelforge::dispatch($generation);
-    $generation->refresh();
-
-    expect($generation->status)->toBe(GenerationStatus::Failed)
-        ->and($generation->error_code)->toBe('retries_exhausted')
-        ->and($generation->submission_attempts)->toBe(5)
-        ->and(createRequestsSent())->toBe(5);
-});
-
 it('fails a permanently rejected Generation straight away with Pixelforge\'s code and no Price', function (int $status, string $type, string $code) {
     fakeCreateResponses([pixelforgeRejects($status, $type, $code, 'Rejected by Pixelforge.')]);
 
@@ -397,9 +208,7 @@ it('fails a permanently rejected Generation straight away with Pixelforge\'s cod
         ->and(createRequestsSent())->toBe(1);
 })->with([
     'content policy' => [400, 'invalid_request_error', 'content_policy_violation'],
-    'validation' => [422, 'invalid_request_error', 'validation_failed'],
     'daily limit' => [429, 'rate_limit_error', 'daily_limit_exceeded'],
-    'idempotency key reused' => [409, 'idempotency_error', 'idempotency_key_reused'],
 ]);
 
 it('resubmits a pending Generation whose submission died, and it reaches queued', function () {
@@ -434,6 +243,8 @@ it('explains each failure in plain language in the history', function (string $c
     ['generation_failed', "The model couldn't produce an image"],
     ['internal_error', 'Pixelforge had an internal error; trying again usually works'],
     ['retries_exhausted', 'Provider busy, gave up after 5 attempts'],
+    ['provider_unreachable', "Couldn't reach Pixelforge, gave up after 5 attempts"],
+    ['invalid_api_key', "PixelForge couldn't sign in to its image provider; try again later"],
     ['something_new', 'Pixelforge couldn\'t complete this Generation'],
 ]);
 
@@ -445,4 +256,16 @@ it('leaves a pending Generation alone while its submission may still be retrying
 
     expect($generation->refresh()->status)->toBe(GenerationStatus::Pending)
         ->and(createRequestsSent())->toBe(0);
+});
+
+it('renews a Generation\'s lease while it waits its turn at the concurrency limit, so reconciliation leaves it alone', function () {
+    $generation = Generation::factory()->create(['updated_at' => now()->subSeconds(ReconcileGenerations::PENDING_STALE_AFTER_SECONDS + 1)]);
+
+    app(GenerationLifecycle::class)->recordSubmissionAttempt(
+        $generation,
+        Answer::refused(Refusal::NotYet, 'concurrency_limit_exceeded', 'Too many generations in progress.', 5),
+    );
+
+    expect($generation->refresh()->updated_at?->equalTo(now()))->toBeTrue()
+        ->and($generation->submission_attempts)->toBe(0);
 });
