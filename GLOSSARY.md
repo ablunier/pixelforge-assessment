@@ -31,7 +31,7 @@ The 25% added on top of the Provider Cost to produce the Price.
 _Avoid_: margin, fee, commission
 
 **Price**:
-What the user pays for a succeeded Generation: Provider Cost plus Markup, exact to the nanodollar.
+What the user pays for a succeeded Generation: Provider Cost plus Markup, exact to the nanodollar, but never more than its Maximum Price (ADR-0004).
 _Avoid_: cost (reserved for Provider Cost), fee, amount
 
 **Maximum Price**:
