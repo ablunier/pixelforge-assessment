@@ -92,10 +92,10 @@ The suite tests at the app's outer edge: Inertia requests, signed webhook POSTs 
 
 A Laravel 13 + Inertia + Vue 3 (TypeScript) app on Postgres, with a database queue and the scheduler. Pressing Generate never calls Pixelforge inside the request ([ADR-0003](docs/adr/0003-queued-submission-with-pending-status.md)):
 
-1. **Generate** validates the input, computes the Maximum Price on the server, saves the Generation as `pending` and queues its submission.
+1. **Generate** validates the input and the user's limits ([ADR-0006](docs/adr/0006-per-user-generation-limits.md)), computes the Maximum Price on the server, saves the Generation as `pending` and queues its submission. If Pixelforge can't quote rates, the last rates it quoted are used.
 2. **The submit job** sends it to Pixelforge with the local id as the `Idempotency-Key` and in `metadata`. It retries rate limits, concurrency waits, overloads, server errors and lost responses after `Retry-After` or a capped backoff, and ends permanent rejections and exhausted retries as `failed`. A Generation Pixelforge may already hold (its response was lost) is never failed early: it stays `pending` for reconciliation to resend, for up to 20 attempts ([ADR-0005](docs/adr/0005-submission-retries-and-giving-up.md)).
-3. **Updates** arrive through signed Webhook Events, the create response, or reconciliation, which every minute polls Generations that went quiet and resubmits `pending` ones whose job died. All three go through the same lifecycle entry point.
-4. **On success** the image is downloaded in a queued job and served from local storage.
+3. **Updates** arrive through signed Webhook Events, the create response, or reconciliation, which every minute polls Generations that went quiet and resubmits `pending` ones whose job died. All three go through the same lifecycle entry point. A Generation Pixelforge hasn't finished an hour after Generate is given up on ([ADR-0007](docs/adr/0007-giving-up-on-unfinished-generations.md)).
+4. **On success** the image is downloaded in a queued job and served from local storage. Reconciliation retries a download that gave up for as long as Pixelforge's image URL works.
 
 | Part                          | Where                                                                                                                                                  |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -130,7 +130,7 @@ A Laravel 13 + Inertia + Vue 3 (TypeScript) app on Postgres, with a database que
 
 Live at <https://pixelforge.blunier.me>. Every push to `main` is tested and then deployed to the droplet. See [docs/deploy.md](docs/deploy.md) for the stack and the one-time manual setup (DNS, droplet bootstrap, GitHub secrets, the Pixelforge webhook URL).
 
-The reviewer account is created in production with real Generations, one per sandbox keyword, so they match Pixelforge's own records. This is a deliberate departure from the spec's "a seeder creates … example Generations": `db:seed` still creates the account in production but skips the made-up examples, whose fake `gen_` ids and Provider Costs would never reconcile against Pixelforge's `GET /v1/usage`.
+The reviewer account is created in production with real Generations, one per sandbox keyword, so they match Pixelforge's own records. This is a deliberate departure from the spec's "a seeder creates … example Generations": `db:seed` still creates the account in production but skips the made-up examples, whose fake `gen_` ids and Provider Costs would never reconcile against Pixelforge's `GET /v1/usage` ([ADR-0008](docs/adr/0008-production-reviewer-examples.md)).
 
 ```sh
 docker compose -f compose.production.yaml exec -e REVIEWER_EMAIL=<reviewer-email> app php artisan reviewer:create --examples
@@ -142,6 +142,8 @@ docker compose -f compose.production.yaml exec -e REVIEWER_EMAIL=<reviewer-email
 
 - **No Balances or admin report yet.** Credits, Top-ups, Holds and Charges ([ADR-0002](docs/adr/0002-hold-then-charge-ledger.md)), and the admin report reconciled against `GET /v1/usage`, are the stretch spec in [#2](https://github.com/ablunier/pixelforge-assessment/issues/2). Today a Price is recorded but not deducted from anything.
 - **Shared provider limits.** Pixelforge's limits (60 requests a minute, 3 concurrent, 500 a day) apply to the whole Pixelforge account, across the local and production keys.
+- **Per-user limits.** Each user may have 5 Generations in progress, 50 in any 24 hours and 10 a minute ([ADR-0006](docs/adr/0006-per-user-generation-limits.md)). Throwaway accounts still multiply these.
+- **History capped at 50.** The history shows a user's 50 newest Generations, with no pagination yet.
 - **Polling, not push.** The history polls every few seconds while a Generation is in flight. There are no WebSockets.
 - **No automatic retry after acceptance.** A Generation that fails at Pixelforge stays failed. Users press "Try again".
 - **Single droplet.** Images live on a Docker volume on one droplet, with no object storage or backups.
@@ -150,7 +152,7 @@ docker compose -f compose.production.yaml exec -e REVIEWER_EMAIL=<reviewer-email
 ## Resources
 
 - [GLOSSARY.md](GLOSSARY.md): the domain language (Generation, Provider Cost, Markup, Price, Maximum Price, ...).
-- [docs/adr](docs/adr): architecture decisions ([0001](docs/adr/0001-integer-nanodollars-for-money.md) integer nanodollars, [0002](docs/adr/0002-hold-then-charge-ledger.md) Hold-then-Charge ledger, [0003](docs/adr/0003-queued-submission-with-pending-status.md) queued submission with a `pending` status, [0004](docs/adr/0004-price-capped-at-maximum-price.md) Price capped at the Maximum Price, [0005](docs/adr/0005-submission-retries-and-giving-up.md) submission retries and giving up).
+- [docs/adr](docs/adr): architecture decisions ([0001](docs/adr/0001-integer-nanodollars-for-money.md) integer nanodollars, [0002](docs/adr/0002-hold-then-charge-ledger.md) Hold-then-Charge ledger, [0003](docs/adr/0003-queued-submission-with-pending-status.md) queued submission with a `pending` status, [0004](docs/adr/0004-price-capped-at-maximum-price.md) Price capped at the Maximum Price, [0005](docs/adr/0005-submission-retries-and-giving-up.md) submission retries and giving up, [0006](docs/adr/0006-per-user-generation-limits.md) per-user Generation limits, [0007](docs/adr/0007-giving-up-on-unfinished-generations.md) giving up on unfinished Generations, [0008](docs/adr/0008-production-reviewer-examples.md) real reviewer examples in production).
 - [docs/deploy.md](docs/deploy.md): production stack and setup.
 - [docs/sandbox-verification.md](docs/sandbox-verification.md): manual checks against the real sandbox.
 - [Pixelforge API reference](https://pixelforge.promptedit.dev/docs).
