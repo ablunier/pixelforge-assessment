@@ -19,9 +19,16 @@ export type TokenRules = {
     reasoning: Record<Quality, { min: number; max: number }>;
 };
 
+/** The Markup as a fraction of the Provider Cost, from App\Pricing\Pricing::markup(). */
+export type Markup = {
+    numerator: number;
+    denominator: number;
+};
+
 export type PricingData = {
     rates: Rates;
     tokens: TokenRules;
+    markup: Markup;
 };
 
 /** Lowest and highest Price, in integer nanodollars. */

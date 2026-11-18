@@ -3,6 +3,8 @@
  * (1 USD = 1,000,000,000), held as bigint so no float ever touches them.
  */
 
+import type { Markup } from '@/types';
+
 const SCALE = 9;
 
 export function divideRoundingHalfUp(
@@ -19,9 +21,15 @@ export function divideRoundingHalfUp(
     return dividend < 0n ? -quotient : quotient;
 }
 
-/** The 25% Markup (×5/4), rounded half up to the nanodollar like the server. */
-export function withMarkup(nanodollars: bigint): bigint {
-    return divideRoundingHalfUp(nanodollars * 5n, 4n);
+/** Add the Markup, rounded half up to the nanodollar like the server. */
+export function withMarkup(
+    nanodollars: bigint,
+    { numerator, denominator }: Markup,
+): bigint {
+    return divideRoundingHalfUp(
+        nanodollars * BigInt(numerator),
+        BigInt(denominator),
+    );
 }
 
 function format(amount: bigint, decimals: number): string {

@@ -1,8 +1,13 @@
 <?php
 
+use App\Models\Generation;
 use App\Models\User;
+use App\Pixelforge\PricingUnavailable;
+use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Testing\TestResponse;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -31,6 +36,7 @@ it('gives the generate form the current rates and the server-computed Price Rang
             ])
             ->where('pricing.tokens.output.high.1536x1024', 6_450)
             ->where('pricing.tokens.reasoning.medium', ['min' => 200, 'max' => 2_000])
+            ->where('pricing.markup', ['numerator' => 5, 'denominator' => 4])
             // The default form (empty prompt, 1024x1024, medium, no references):
             // 1,100 output and 200 to 2,000 reasoning tokens, plus Markup.
             ->where('priceRange', ['min' => 58_125_000, 'max' => 86_250_000])
@@ -64,6 +70,107 @@ it('caches the rates for about an hour', function () {
     $this->actingAs($user)->get(route('dashboard'))->assertOk();
 
     Http::assertSentCount(2);
+});
+
+/**
+ * Pixelforge answers successive GET /v1/pricing requests with these responses.
+ *
+ * @param  list<PromiseInterface|Closure>  $responses
+ */
+function fakePricingResponses(array $responses): void
+{
+    $sequence = Http::sequence();
+
+    foreach ($responses as $response) {
+        $sequence->pushResponse($response);
+    }
+
+    Http::fake(['pixelforge.test/v1/pricing' => $sequence]);
+}
+
+function publishedRates(): PromiseInterface
+{
+    return Http::response(['rates' => [
+        'input_text_tokens' => '5.00',
+        'input_image_tokens' => '10.00',
+        'output_tokens' => '40.00',
+        'reasoning_tokens' => '12.50',
+    ]]);
+}
+
+it('still shows the history, with no pricing, when Pixelforge can\'t quote rates and none are known', function () {
+    Exceptions::fake();
+    fakePricingResponses([Http::response(['error' => ['code' => 'overloaded', 'message' => 'Overloaded.']], 503)]);
+    $user = User::factory()->create();
+    Generation::factory()->for($user)->succeeded()->create();
+
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('pricing', null)
+            ->where('priceRange', null)
+            ->has('generations', 1)
+        );
+
+    Exceptions::assertReported(PricingUnavailable::class);
+});
+
+it('prices with the last rates Pixelforge quoted while it can\'t quote them, asking again after a minute', function () {
+    Exceptions::fake();
+    fakePricingResponses([publishedRates(), Http::response('Bad gateway', 502), Http::response('Bad gateway', 502)]);
+    $user = User::factory()->create();
+
+    $this->actingAs($user)->get(route('dashboard'))->assertOk();
+    $this->travel(61)->minutes();
+
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('pricing.rates.output_tokens', 40_000)
+            ->where('priceRange', ['min' => 58_125_000, 'max' => 86_250_000])
+        );
+    $this->actingAs($user)->get(route('dashboard'))->assertOk();
+
+    Http::assertSentCount(2);
+
+    $this->travel(61)->seconds();
+    $this->actingAs($user)->get(route('dashboard'))->assertOk();
+
+    Http::assertSentCount(3);
+});
+
+it('never caches rates it can\'t read, so the next page asks again', function () {
+    Exceptions::fake();
+    fakePricingResponses([Http::response(['object' => 'pricing']), publishedRates()]);
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertInertia(fn (Assert $page) => $page->where('pricing', null));
+
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertInertia(fn (Assert $page) => $page->where('pricing.rates.output_tokens', 40_000));
+});
+
+it('submits nothing and says why when there are no rates to price a Generation with', function () {
+    Exceptions::fake();
+    Queue::fake();
+    fakePricingResponses([Http::failedConnection()]);
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->post(route('generations.store'), [
+            'prompt' => 'A lighthouse',
+            'size' => '1024x1024',
+            'quality' => 'low',
+            'reference_images' => [],
+        ])
+        ->assertSessionHasErrors(['generate' => "Prices can't be loaded right now, so nothing was submitted. Try again in a minute."]);
+
+    expect($user->generations()->count())->toBe(0);
+    Queue::assertNothingPushed();
 });
 
 /**

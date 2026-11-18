@@ -14,7 +14,10 @@ use Illuminate\Http\Client\ConnectionException;
 interface PixelforgeClient
 {
     /**
-     * The current rates from GET /v1/pricing, cached for about an hour.
+     * The current rates from GET /v1/pricing, cached for about an hour. While
+     * Pixelforge can't quote them, the last rates it quoted.
+     *
+     * @throws PricingUnavailable when no rates have ever been quoted
      */
     public function rates(): Rates;
 

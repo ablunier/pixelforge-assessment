@@ -23,7 +23,7 @@ export function priceRange(
     size: Size,
     quality: Quality,
     referenceImageCount: number,
-    { rates, tokens }: PricingData,
+    { rates, tokens, markup }: PricingData,
 ): BigPriceRange {
     const estimatedTextTokens = ceilDiv(
         BigInt(characters),
@@ -49,5 +49,8 @@ export function priceRange(
             ceilDiv(estimatedTextTokens * (100n + variance), 100n) +
         BigInt(rates.reasoning_tokens) * BigInt(reasoning.max);
 
-    return { min: withMarkup(minCost), max: withMarkup(maxCost) };
+    return {
+        min: withMarkup(minCost, markup),
+        max: withMarkup(maxCost, markup),
+    };
 }

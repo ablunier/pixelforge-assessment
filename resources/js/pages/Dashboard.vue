@@ -24,9 +24,10 @@ defineOptions({
 });
 
 const props = defineProps<{
-    pricing: PricingData;
-    /** The server's Price Range for the form's defaults. */
-    priceRange: PriceRange;
+    /** Null while Pixelforge's rates can't be had: the form can't price, so it can't submit. */
+    pricing: PricingData | null;
+    /** The server's Price Range for the form's defaults; null with `pricing`. */
+    priceRange: PriceRange | null;
     options: GenerateFormOptions;
     /** The user's Generations, newest first. */
     generations: Generation[];
@@ -35,7 +36,11 @@ const props = defineProps<{
 }>();
 
 // Guard against the TypeScript mirror drifting from App\Pricing\Pricing.
-if (import.meta.env.DEV) {
+if (
+    import.meta.env.DEV &&
+    props.pricing !== null &&
+    props.priceRange !== null
+) {
     const mirrored = mirroredPriceRange(
         0,
         props.options.defaultSize,
