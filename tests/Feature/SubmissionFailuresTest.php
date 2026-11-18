@@ -6,7 +6,10 @@ use App\Jobs\SubmitGenerationToPixelforge;
 use App\Models\Generation;
 use App\Models\User;
 use App\Pixelforge\PixelforgeError;
+use App\Pixelforge\UnexpectedPixelforgeResponse;
 use GuzzleHttp\Promise\PromiseInterface;
+use Illuminate\Bus\UniqueLock;
+use Illuminate\Contracts\Cache\Repository as Cache;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Http;
@@ -109,8 +112,11 @@ function retryDelaysAfterSubmitting(int $times): array
     $generation = pressGenerate();
 
     for ($i = 0; $i < $times; $i++) {
-        // With the queue faked, dispatchSync() would only be recorded, so run the job directly.
-        app()->call([new SubmitGenerationToPixelforge($generation), 'handle']);
+        // With the queue faked, dispatchSync() would only be recorded, so run the job
+        // directly, first releasing its unique lock as a worker does when it starts it.
+        $job = new SubmitGenerationToPixelforge($generation);
+        (new UniqueLock(app(Cache::class)))->release($job);
+        app()->call([$job, 'handle']);
     }
 
     return Queue::pushed(SubmitGenerationToPixelforge::class)
@@ -130,6 +136,63 @@ it('backs off exponentially when Pixelforge sends no Retry-After', function () {
     fakeCreateResponses(array_fill(0, 4, pixelforgeRejects(503, 'api_error', 'overloaded', 'Overloaded.')));
 
     expect(retryDelaysAfterSubmitting(4))->toBe([2, 4, 8, 16]);
+});
+
+it('caps a long Retry-After at a minute, so reconciliation never mistakes the wait for a dead submission', function () {
+    fakeCreateResponses([pixelforgeRejects(429, 'rate_limit_error', 'rate_limit_exceeded', 'Too many requests.', ['Retry-After' => '300'])]);
+
+    expect(retryDelaysAfterSubmitting(1))->toBe([60]);
+});
+
+it('never queues a second submission for a Generation whose retry is still waiting in the queue', function () {
+    Queue::fake();
+    $generation = pressGenerate();
+
+    // The queue is so busy the job hasn't started by the time reconciliation looks.
+    $this->travel(ReconcileGenerations::PENDING_STALE_AFTER_SECONDS + 1)->seconds();
+    $this->artisan('generations:reconcile')->assertSuccessful();
+
+    Queue::assertPushed(SubmitGenerationToPixelforge::class, 1);
+    expect($generation->refresh()->status)->toBe(GenerationStatus::Pending);
+});
+
+function unreadableAcceptance(): PromiseInterface
+{
+    return Http::response(pixelforgeGeneration('queued', ['status' => 'canceled']), 202);
+}
+
+it('resends a submission Pixelforge accepted in a response this app can\'t read, and reports it', function () {
+    Exceptions::fake();
+    fakeCreateResponses([unreadableAcceptance(), accepted()]);
+
+    $generation = pressGenerate();
+
+    expect($generation->status)->toBe(GenerationStatus::Queued)
+        ->and($generation->submission_attempts)->toBe(2)
+        ->and(createRequestsSent())->toBe(2);
+    Exceptions::assertReported(UnexpectedPixelforgeResponse::class);
+});
+
+it('keeps resending an acceptance it can\'t read within the attempt budget, then fails it with no Price', function () {
+    Exceptions::fake();
+    fakeCreateResponses(array_fill(0, 21, unreadableAcceptance()));
+    $generation = pressGenerate();
+
+    // Pixelforge may hold it, so it isn't failed after the first 5 attempts.
+    expect($generation->status)->toBe(GenerationStatus::Pending)
+        ->and($generation->submission_attempts)->toBe(5);
+
+    reconcileResends(16);
+
+    expect($generation->refresh()->status)->toBe(GenerationStatus::Failed)
+        ->and($generation->error_code)->toBe('provider_unreachable')
+        ->and($generation->submission_attempts)->toBe(20)
+        ->and($generation->price)->toBeNull()
+        ->and(createRequestsSent())->toBe(20);
+
+    reconcileResends(1);
+
+    expect(createRequestsSent())->toBe(20);
 });
 
 it('fails a Generation with retries exhausted after 5 overloaded attempts, with no Price', function () {

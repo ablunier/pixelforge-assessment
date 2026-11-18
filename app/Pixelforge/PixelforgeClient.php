@@ -27,6 +27,7 @@ interface PixelforgeClient
      *
      * @throws PixelforgeError when Pixelforge rejects the request
      * @throws ConnectionException when Pixelforge can't be reached
+     * @throws UnexpectedPixelforgeResponse when a success response isn't a usable Generation
      */
     public function createGeneration(string $generationId, string $prompt, Size $size, Quality $quality, array $referenceImages): GenerationSnapshot;
 
@@ -35,6 +36,7 @@ interface PixelforgeClient
      *
      * @throws PixelforgeError when Pixelforge rejects the request
      * @throws ConnectionException when Pixelforge can't be reached
+     * @throws UnexpectedPixelforgeResponse when a success response isn't a usable Generation
      */
     public function retrieveGeneration(string $pixelforgeId): GenerationSnapshot;
 }

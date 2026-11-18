@@ -9,6 +9,7 @@ use Illuminate\Contracts\Cache\Repository as Cache;
 use Illuminate\Http\Client\Factory as Http;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
+use InvalidArgumentException;
 
 final readonly class HttpPixelforgeClient implements PixelforgeClient
 {
@@ -62,7 +63,11 @@ final readonly class HttpPixelforgeClient implements PixelforgeClient
             throw PixelforgeError::fromResponse($response);
         }
 
-        return GenerationSnapshot::fromPixelforge((array) $response->json());
+        try {
+            return GenerationSnapshot::fromPixelforge((array) $response->json());
+        } catch (InvalidArgumentException $exception) {
+            throw UnexpectedPixelforgeResponse::because($exception);
+        }
     }
 
     private function request(): PendingRequest

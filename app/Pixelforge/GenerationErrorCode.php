@@ -29,6 +29,9 @@ enum GenerationErrorCode: string
     // Local: no create request got a definite answer from Pixelforge (ADR-0005).
     case ProviderUnreachable = 'provider_unreachable';
 
+    // Local: Pixelforge accepted it but never finished it (ADR-0007).
+    case NeverFinished = 'never_finished';
+
     /**
      * What the user reads in the history, for any recorded error code,
      * including ones Pixelforge adds later. `$submissionAttempts` is how many
@@ -51,6 +54,7 @@ enum GenerationErrorCode: string
             self::InternalError => 'Pixelforge had an internal error; trying again usually works',
             self::RetriesExhausted => "Provider busy, gave up after {$submissionAttempts} attempts",
             self::ProviderUnreachable => "Couldn't reach Pixelforge, gave up after {$submissionAttempts} attempts",
+            self::NeverFinished => 'Pixelforge never finished it',
         };
     }
 }

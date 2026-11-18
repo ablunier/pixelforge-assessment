@@ -45,6 +45,13 @@ final readonly class GenerationSnapshot
             throw new InvalidArgumentException('Not a Pixelforge Generation object.');
         }
 
+        $usage = is_array($generation['usage'] ?? null) ? Usage::fromPixelforge($generation['usage']) : null;
+
+        // A Price is recorded from the usage, so a success without it can't be applied.
+        if ($status === GenerationStatus::Succeeded && $usage === null) {
+            throw new InvalidArgumentException("Pixelforge Generation {$id} succeeded without usage.");
+        }
+
         $metadata = is_array($generation['metadata'] ?? null) ? $generation['metadata'] : [];
         $error = is_array($generation['error'] ?? null) ? $generation['error'] : [];
 
@@ -53,7 +60,7 @@ final readonly class GenerationSnapshot
             status: $status,
             generationId: self::string($metadata, 'generation_id'),
             rates: Rates::fromPixelforge(is_array($generation['rates'] ?? null) ? $generation['rates'] : []),
-            usage: is_array($generation['usage'] ?? null) ? Usage::fromPixelforge($generation['usage']) : null,
+            usage: $usage,
             errorCode: self::string($error, 'code'),
             errorMessage: self::string($error, 'message'),
             imageUrl: self::string($generation, 'image_url'),

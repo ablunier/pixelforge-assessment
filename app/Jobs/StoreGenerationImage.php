@@ -9,11 +9,13 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Http\Client\Factory as Http;
 use Illuminate\Support\Facades\Storage;
+use UnexpectedValueException;
 
 /**
  * Downloads a succeeded Generation's PNG to the `generation-images` disk, so
  * it stays available after Pixelforge's signed URL expires (24 hours after
- * completion). Dispatched once, on the transition into `succeeded`.
+ * completion). Dispatched on the transition into `succeeded`, and again by
+ * reconciliation while the URL works and no copy is stored.
  */
 class StoreGenerationImage implements ShouldQueue
 {
@@ -22,6 +24,11 @@ class StoreGenerationImage implements ShouldQueue
     public const string DISK = 'generation-images';
 
     public int $tries = 5;
+
+    /** The largest image accepted: a 1536×1024 PNG is a few megabytes at most. */
+    public const int MAX_IMAGE_BYTES = 20 * 1024 * 1024;
+
+    private const string PNG_SIGNATURE = "\x89PNG\r\n\x1a\n";
 
     public function __construct(public Generation $generation) {}
 
@@ -57,6 +64,10 @@ class StoreGenerationImage implements ShouldQueue
         }
 
         $png = $http->timeout(30)->get((string) $generation->provider_image_url)->throw()->body();
+
+        if (strlen($png) > self::MAX_IMAGE_BYTES || ! str_starts_with($png, self::PNG_SIGNATURE)) {
+            throw new UnexpectedValueException("The image for Generation {$generation->id} isn't a PNG of at most ".self::MAX_IMAGE_BYTES.' bytes.');
+        }
 
         $path = "{$generation->id}.png";
         Storage::disk(self::DISK)->put($path, $png);

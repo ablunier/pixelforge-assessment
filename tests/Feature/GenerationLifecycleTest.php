@@ -1,12 +1,18 @@
 <?php
 
+use App\Actions\GenerationLifecycle;
+use App\Console\Commands\ReconcileGenerations;
 use App\Enums\GenerationStatus;
 use App\Models\Generation;
 use App\Models\User;
+use App\Pixelforge\GenerationSnapshot;
+use App\Pixelforge\UnexpectedPixelforgeResponse;
 use Illuminate\Console\Scheduling\Event;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Http;
+use Inertia\Testing\AssertableInertia as Assert;
 
 beforeEach(function () {
     config([
@@ -286,4 +292,86 @@ it('never fails a Generation that already succeeded', function () {
     expect($generation->status)->toBe(GenerationStatus::Succeeded)
         ->and($generation->error_code)->toBeNull()
         ->and($generation->price?->nanodollars())->toBe(381_887_500);
+});
+
+it('keeps polling the other Generations when one poll returns a response this app can\'t read', function () {
+    Exceptions::fake();
+    $unreadable = Generation::factory()->accepted()->create(['pixelforge_id' => 'gen_UNREADABLE', 'updated_at' => now()->subMinutes(2)]);
+    $later = Generation::factory()->accepted()->create(['pixelforge_id' => 'gen_01JC2Z8Q4N6V0M3H7X5T9R2B1K', 'updated_at' => now()->subMinutes(2)]);
+    Http::fake([
+        'pixelforge.test/v1/generations/gen_UNREADABLE' => Http::response(pixelforgeGeneration('canceled', ['id' => 'gen_UNREADABLE'])),
+        'pixelforge.test/v1/generations/gen_01JC2Z8Q4N6V0M3H7X5T9R2B1K' => Http::response(pixelforgeGeneration('processing')),
+    ]);
+
+    reconcile();
+
+    expect($unreadable->refresh()->status)->toBe(GenerationStatus::Queued)
+        ->and($later->refresh()->status)->toBe(GenerationStatus::Processing);
+    Exceptions::assertReported(UnexpectedPixelforgeResponse::class);
+});
+
+it('gives up on a Generation Pixelforge hasn\'t finished an hour after Generate, with no Price and a readable reason', function () {
+    $generation = Generation::factory()->accepted(GenerationStatus::Processing)
+        ->create(['pixelforge_id' => 'gen_01JC2Z8Q4N6V0M3H7X5T9R2B1K']);
+    Http::fake(['pixelforge.test/v1/generations/*' => Http::response(pixelforgeGeneration('processing'))]);
+
+    $this->travel(ReconcileGenerations::GIVE_UP_AFTER_MINUTES - 1)->minutes();
+    reconcile();
+
+    expect($generation->refresh()->status)->toBe(GenerationStatus::Processing);
+
+    $this->travel(2)->minutes();
+    reconcile();
+    $generation->refresh();
+
+    expect($generation->status)->toBe(GenerationStatus::Failed)
+        ->and($generation->error_code)->toBe('never_finished')
+        ->and($generation->provider_cost)->toBeNull()
+        ->and($generation->price)->toBeNull();
+
+    $this->actingAs($generation->user)
+        ->get(route('dashboard'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('generations.0.error.reason', 'Pixelforge never finished it')
+            ->where('pollHistory', false));
+});
+
+it('gives up on a Generation Pixelforge no longer knows, once an hour has passed', function () {
+    Exceptions::fake();
+    $generation = Generation::factory()->accepted()->create(['pixelforge_id' => 'gen_01JC2Z8Q4N6V0M3H7X5T9R2B1K']);
+    Http::fake(['pixelforge.test/v1/generations/*' => Http::response(
+        ['error' => ['type' => 'invalid_request_error', 'code' => 'not_found', 'message' => 'No such generation.']],
+        404,
+    )]);
+
+    $this->travel(ReconcileGenerations::GIVE_UP_AFTER_MINUTES + 1)->minutes();
+    reconcile();
+
+    expect($generation->refresh()->status)->toBe(GenerationStatus::Failed)
+        ->and($generation->error_code)->toBe('never_finished');
+});
+
+it('records the Price when the last poll before giving up finds the Generation succeeded', function () {
+    $generation = Generation::factory()->accepted(GenerationStatus::Processing)
+        ->create(['pixelforge_id' => 'gen_01JC2Z8Q4N6V0M3H7X5T9R2B1K']);
+    Http::fake(['pixelforge.test/v1/generations/*' => Http::response(pixelforgeGeneration('succeeded'))]);
+
+    $this->travel(ReconcileGenerations::GIVE_UP_AFTER_MINUTES + 1)->minutes();
+    reconcile();
+
+    expect($generation->refresh()->status)->toBe(GenerationStatus::Succeeded)
+        ->and($generation->price?->nanodollars())->toBe(381_887_500);
+});
+
+it('never changes a final Generation, not even to record a gen_ id or rates a later snapshot reports', function () {
+    $generation = Generation::factory()->create([
+        'status' => GenerationStatus::Failed,
+    ]);
+    $before = $generation->fresh()->getAttributes();
+
+    app(GenerationLifecycle::class)->apply($generation, GenerationSnapshot::fromPixelforge(pixelforgeGeneration('queued')));
+
+    expect($generation->fresh()->getAttributes())->toBe($before)
+        ->and($generation->fresh()->pixelforge_id)->toBeNull()
+        ->and($generation->fresh()->lockedRates())->toBeNull();
 });

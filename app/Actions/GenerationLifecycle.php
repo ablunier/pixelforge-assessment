@@ -30,6 +30,11 @@ final class GenerationLifecycle
     public function apply(Generation $generation, GenerationSnapshot $snapshot): Generation
     {
         return $this->underLock($generation, function (Generation $generation) use ($snapshot): void {
+            // A final Generation never changes, not even to learn its `gen_` id or rates (story 31).
+            if ($generation->status->isFinal()) {
+                return;
+            }
+
             // From whichever source reports them first, e.g. the create response or an early webhook.
             $generation->pixelforge_id ??= $snapshot->pixelforgeId;
 
@@ -71,6 +76,22 @@ final class GenerationLifecycle
     }
 
     /**
+     * End a Generation Pixelforge accepted but never finished (ADR-0007) as
+     * `failed`, with no Provider Cost or Price. Ignored if it reached a final
+     * status meanwhile.
+     */
+    public function giveUp(Generation $generation): Generation
+    {
+        return $this->underLock($generation, function (Generation $generation): void {
+            if ($generation->status->canMoveTo(GenerationStatus::Failed)) {
+                $generation->status = GenerationStatus::Failed;
+                $generation->error_code = GenerationErrorCode::NeverFinished->value;
+                $generation->error_message = null;
+            }
+        });
+    }
+
+    /**
      * Re-read the Generation under its row lock, let `$change` modify it, and
      * save it, all in one transaction. Returns the saved Generation.
      *
@@ -92,8 +113,9 @@ final class GenerationLifecycle
     {
         $lockedRates = $generation->lockedRates();
 
+        // GenerationSnapshot guarantees usage on a success, and apply() locked the rates.
         if ($snapshot->usage === null || $lockedRates === null) {
-            throw new LogicException("Pixelforge reported Generation {$generation->id} succeeded without usage or rates.");
+            throw new LogicException("Generation {$generation->id} succeeded without usage or locked rates.");
         }
 
         $generation->input_text_tokens = $snapshot->usage->inputTextTokens;
