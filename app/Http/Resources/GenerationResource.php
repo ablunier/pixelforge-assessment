@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Enums\GenerationStatus;
+use App\Enums\ImageSource;
 use App\Models\Generation;
 use App\Pixelforge\GenerationErrorCode;
 use Illuminate\Http\Request;
@@ -43,7 +44,7 @@ class GenerationResource extends JsonResource
      * Where a succeeded Generation's image can be seen: the stored copy once
      * downloaded, else Pixelforge's signed URL until it expires.
      *
-     * @return array{source: 'stored'|'provider'|'expired', url: string|null, downloadUrl: string|null, expiresAt: string|null}|null
+     * @return array{source: value-of<ImageSource>, url: string|null, downloadUrl: string|null, expiresAt: string|null}|null
      */
     private function image(): ?array
     {
@@ -53,7 +54,7 @@ class GenerationResource extends JsonResource
 
         if ($this->image_path !== null) {
             return [
-                'source' => 'stored',
+                'source' => ImageSource::Stored->value,
                 'url' => route('generations.image', $this->resource),
                 'downloadUrl' => route('generations.image.download', $this->resource),
                 'expiresAt' => null,
@@ -63,7 +64,7 @@ class GenerationResource extends JsonResource
         $live = $this->resource->hasLiveProviderImageUrl();
 
         return [
-            'source' => $live ? 'provider' : 'expired',
+            'source' => ($live ? ImageSource::Provider : ImageSource::Expired)->value,
             'url' => $live ? $this->provider_image_url : null,
             'downloadUrl' => $live ? $this->provider_image_url : null,
             'expiresAt' => $this->provider_image_url_expires_at?->toIso8601ZuluString(),
