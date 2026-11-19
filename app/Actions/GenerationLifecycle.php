@@ -62,20 +62,6 @@ final class GenerationLifecycle
     }
 
     /**
-     * End a Generation that Pixelforge never accepted (a rejected submission or
-     * exhausted retries) as `failed`, with no Provider Cost or Price. Ignored
-     * if the Generation has already moved on, e.g. through an early webhook.
-     * `$errorCode` is Pixelforge's code as sent (possibly one this app doesn't
-     * know yet) or a GenerationErrorCode.
-     */
-    public function failSubmission(Generation $generation, GenerationErrorCode|string $errorCode, ?string $errorMessage): Generation
-    {
-        return $this->underLock($generation, function (Generation $generation) use ($errorCode, $errorMessage): void {
-            $this->failUnaccepted($generation, $errorCode, $errorMessage);
-        });
-    }
-
-    /**
      * Record one create request and Pixelforge's answer to it (ADR-0005): count
      * the attempt as SubmissionRules decides, and fail the Generation if they
      * say so, all under the row lock, so concurrent attempts never miscount.
@@ -137,7 +123,11 @@ final class GenerationLifecycle
     }
 
     /**
-     * Ignored if the Generation has moved on, or once Pixelforge has its `gen_` id.
+     * End a Generation that Pixelforge never accepted (a rejected submission or
+     * exhausted retries) as `failed`, with no Provider Cost or Price. Ignored
+     * if the Generation has already moved on, e.g. through an early webhook,
+     * or once Pixelforge has its `gen_` id. `$errorCode` is Pixelforge's code
+     * as sent (possibly one this app doesn't know yet) or a GenerationErrorCode.
      */
     private function failUnaccepted(Generation $generation, GenerationErrorCode|string $errorCode, ?string $errorMessage): void
     {
