@@ -160,10 +160,50 @@ function reconcileResends(int $times): void
     }
 }
 
+it('fails a Generation whose responses were lost for 20 attempts, with no Price and a readable reason, and stops resending it', function () {
+    fakeCreateResponses(array_fill(0, 21, responseLost()));
+    $generation = pressGenerate();
+
+    // Pixelforge may hold it, so it outlives the 5-attempt budget for reconciliation's resends.
+    expect($generation->status)->toBe(GenerationStatus::Pending)
+        ->and($generation->submission_attempts)->toBe(5);
+
+    reconcileResends(16);
+
+    expect($generation->refresh()->status)->toBe(GenerationStatus::Failed)
+        ->and($generation->error_code)->toBe('provider_unreachable')
+        ->and($generation->submission_attempts)->toBe(20)
+        ->and($generation->price)->toBeNull()
+        ->and(createRequestsSent())->toBe(20);
+
+    $this->actingAs($generation->user)
+        ->get(route('dashboard'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('generations.0.error.reason', "Couldn't reach Pixelforge, gave up after 20 attempts"));
+
+    reconcileResends(1);
+
+    expect(createRequestsSent())->toBe(20);
+});
+
 function apiKeyRefused(): PromiseInterface
 {
     return pixelforgeRejects(401, 'authentication_error', 'invalid_api_key', 'Missing or invalid API key.');
 }
+
+it('stops resending a Generation after 20 attempts with a refused API key, failing it with Pixelforge\'s code', function () {
+    Exceptions::fake();
+    fakeCreateResponses(array_fill(0, 21, apiKeyRefused()));
+    $generation = pressGenerate();
+
+    reconcileResends(20);
+
+    expect($generation->refresh()->status)->toBe(GenerationStatus::Failed)
+        ->and($generation->error_code)->toBe('invalid_api_key')
+        ->and($generation->submission_attempts)->toBe(20)
+        ->and($generation->price)->toBeNull()
+        ->and(createRequestsSent())->toBe(20);
+});
 
 it('keeps a Generation pending and reports the problem when Pixelforge refuses the API key, so a fixed key picks it up', function () {
     Exceptions::fake();
