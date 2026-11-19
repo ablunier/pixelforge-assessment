@@ -122,6 +122,10 @@ it('decides what each answer to a create request means (ADR-0005)', function (Cl
         fn () => decide(notYet(retryAfter: 5), attemptsSoFar: 1, minutesSinceGenerate: 14),
         new Decision(1, false, new RetryIn(5)),
     ],
+    'not yet at exactly 15 minutes counts like busy' => [
+        fn () => decide(notYet(), attemptsSoFar: 3, minutesSinceGenerate: 15),
+        new Decision(4, false, new RetryIn(16)),
+    ],
     'not yet at 16 minutes counts like busy' => [
         fn () => decide(notYet(), attemptsSoFar: 3, minutesSinceGenerate: 16),
         new Decision(4, false, new RetryIn(16)),

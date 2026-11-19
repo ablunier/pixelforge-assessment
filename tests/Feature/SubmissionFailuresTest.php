@@ -11,6 +11,7 @@ use App\Pixelforge\PixelforgeError;
 use App\Pixelforge\Refusal;
 use App\Pixelforge\UnexpectedPixelforgeResponse;
 use GuzzleHttp\Promise\PromiseInterface;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Http;
@@ -112,6 +113,25 @@ it('resends a submission Pixelforge accepted in a response this app can\'t read,
         ->and($generation->submission_attempts)->toBe(2)
         ->and(createRequestsSent())->toBe(2);
     Exceptions::assertReported(UnexpectedPixelforgeResponse::class);
+});
+
+it('keeps a Generation pending and resends it when Pixelforge accepted it but the acceptance couldn\'t be recorded', function () {
+    Exceptions::fake();
+    Queue::fake();
+    fakeCreateResponses([accepted()]);
+    // Another Generation already holds the fixture's `gen_` id, so recording the acceptance breaks its unique constraint.
+    Generation::factory()->accepted()->create(['pixelforge_id' => pixelforgeGeneration('queued')['id']]);
+    $generation = Generation::factory()->create();
+
+    app()->call([new SubmitGenerationToPixelforge($generation), 'handle']);
+
+    expect($generation->refresh()->status)->toBe(GenerationStatus::Pending)
+        ->and($generation->pixelforge_id)->toBeNull()
+        ->and($generation->submission_attempts)->toBe(1)
+        ->and($generation->submission_outcome_unknown)->toBeTrue();
+    Queue::assertPushed(SubmitGenerationToPixelforge::class, fn (SubmitGenerationToPixelforge $job) => $job->delay === 2
+        && $job->generation->is($generation));
+    Exceptions::assertReported(UniqueConstraintViolationException::class);
 });
 
 it('resends a submission whose response was lost, with the same Idempotency-Key, and applies the replayed Generation', function () {
