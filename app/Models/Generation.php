@@ -197,9 +197,8 @@ class Generation extends Model
     {
         $query->where('status', GenerationStatus::Succeeded)
             ->whereNull('image_path')
+            ->withLiveProviderImageUrl()
             ->where('updated_at', '<', now()->subMinutes(self::IMAGE_RETRY_AFTER_MINUTES));
-
-        self::whereLiveProviderImageUrl($query);
     }
 
     /**
@@ -228,43 +227,26 @@ class Generation extends Model
         );
     }
 
-    /**
-     * Whether Pixelforge's signed image URL is known and hasn't expired yet.
+    /*
+     * A live provider image URL: Pixelforge's signed image URL is known and
+     * hasn't expired yet. hasLiveProviderImageUrl() checks it on a loaded
+     * Generation, withLiveProviderImageUrl() in a query; change both together.
      */
+
     public function hasLiveProviderImageUrl(): bool
     {
-        $generations = collect([$this]);
-
-        foreach (self::liveProviderImageUrlConditions() as [$column, $operator, $value]) {
-            $generations = $generations->where($column, $operator, $value);
-        }
-
-        return $generations->isNotEmpty();
+        return $this->provider_image_url !== null
+            && $this->provider_image_url_expires_at?->isFuture() === true;
     }
 
     /**
      * @param  Builder<self>  $query
      */
-    private static function whereLiveProviderImageUrl(Builder $query): void
+    #[Scope]
+    protected function withLiveProviderImageUrl(Builder $query): void
     {
-        foreach (self::liveProviderImageUrlConditions() as [$column, $operator, $value]) {
-            $query->where($column, $operator, $value);
-        }
-    }
-
-    /**
-     * The one definition of a live provider image URL: known, and expiring in
-     * the future. Written as `where` conditions so the same rule filters both
-     * a query (dueForImageRetry()) and a loaded Generation (hasLiveProviderImageUrl()).
-     *
-     * @return list<array{string, string, mixed}>
-     */
-    private static function liveProviderImageUrlConditions(): array
-    {
-        return [
-            ['provider_image_url', '!=', null],
-            ['provider_image_url_expires_at', '>', now()],
-        ];
+        $query->whereNotNull('provider_image_url')
+            ->where('provider_image_url_expires_at', '>', now());
     }
 
     public function lockRates(Rates $rates): void
