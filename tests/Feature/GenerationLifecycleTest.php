@@ -1,7 +1,6 @@
 <?php
 
 use App\Actions\GenerationLifecycle;
-use App\Console\Commands\ReconcileGenerations;
 use App\Enums\GenerationStatus;
 use App\Models\Generation;
 use App\Models\User;
@@ -315,7 +314,7 @@ it('gives up on a Generation Pixelforge hasn\'t finished an hour after Generate,
         ->create(['pixelforge_id' => 'gen_01JC2Z8Q4N6V0M3H7X5T9R2B1K']);
     Http::fake(['pixelforge.test/v1/generations/*' => Http::response(pixelforgeGeneration('processing'))]);
 
-    $this->travel(ReconcileGenerations::GIVE_UP_AFTER_MINUTES - 1)->minutes();
+    $this->travel(Generation::GIVE_UP_AFTER_MINUTES - 1)->minutes();
     reconcile();
 
     expect($generation->refresh()->status)->toBe(GenerationStatus::Processing);
@@ -344,7 +343,7 @@ it('gives up on a Generation Pixelforge no longer knows, once an hour has passed
         404,
     )]);
 
-    $this->travel(ReconcileGenerations::GIVE_UP_AFTER_MINUTES + 1)->minutes();
+    $this->travel(Generation::GIVE_UP_AFTER_MINUTES + 1)->minutes();
     reconcile();
 
     expect($generation->refresh()->status)->toBe(GenerationStatus::Failed)
@@ -356,7 +355,7 @@ it('records the Price when the last poll before giving up finds the Generation s
         ->create(['pixelforge_id' => 'gen_01JC2Z8Q4N6V0M3H7X5T9R2B1K']);
     Http::fake(['pixelforge.test/v1/generations/*' => Http::response(pixelforgeGeneration('succeeded'))]);
 
-    $this->travel(ReconcileGenerations::GIVE_UP_AFTER_MINUTES + 1)->minutes();
+    $this->travel(Generation::GIVE_UP_AFTER_MINUTES + 1)->minutes();
     reconcile();
 
     expect($generation->refresh()->status)->toBe(GenerationStatus::Succeeded)

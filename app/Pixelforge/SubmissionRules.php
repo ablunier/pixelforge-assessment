@@ -30,10 +30,10 @@ final class SubmissionRules
 
     /**
      * The longest wait before a retry, `Retry-After` included: below
-     * ReconcileGenerations::PENDING_STALE_AFTER_SECONDS. A retry that comes
-     * too early is only refused again.
+     * Generation::PENDING_STALE_AFTER_SECONDS. A retry that comes too early
+     * is only refused again.
      */
-    private const int MAX_RETRY_DELAY_SECONDS = 60;
+    public const int MAX_RETRY_DELAY_SECONDS = 60;
 
     /**
      * How long after Generate concurrency-limit refusals don't count as

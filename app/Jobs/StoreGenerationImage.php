@@ -25,6 +25,9 @@ class StoreGenerationImage implements ShouldQueue
 
     public int $tries = 5;
 
+    /** The longest a single download may take. */
+    public const int DOWNLOAD_TIMEOUT_SECONDS = 30;
+
     /** The largest image accepted: a 1536×1024 PNG is a few megabytes at most. */
     public const int MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 
@@ -63,7 +66,7 @@ class StoreGenerationImage implements ShouldQueue
             return;
         }
 
-        $png = $http->timeout(30)->get((string) $generation->provider_image_url)->throw()->body();
+        $png = $http->timeout(self::DOWNLOAD_TIMEOUT_SECONDS)->get((string) $generation->provider_image_url)->throw()->body();
 
         if (strlen($png) > self::MAX_IMAGE_BYTES || ! str_starts_with($png, self::PNG_SIGNATURE)) {
             throw new UnexpectedValueException("The image for Generation {$generation->id} isn't a PNG of at most ".self::MAX_IMAGE_BYTES.' bytes.');
