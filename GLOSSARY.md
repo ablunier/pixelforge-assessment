@@ -20,6 +20,24 @@ _Avoid_: state, phase
 A notification from Pixelforge that a Generation changed status. The same event may arrive more than once and in any order.
 _Avoid_: callback, notification, hook
 
+## Submission
+
+**Submission Attempt**:
+One create request sent to Pixelforge for a Generation. A Generation gets 5 before it fails, or 20 while Pixelforge may already hold it or refuses our API key (ADR-0005). Concurrency-limit refusals in the first 15 minutes after Generate don't count.
+_Avoid_: try, retry (when meaning the count)
+
+**Answer**:
+What Pixelforge said to one Submission Attempt: accepted, a Refusal, or none at all (a lost response, or an acceptance this app couldn't read or record).
+_Avoid_: response, result
+
+**Refusal**:
+A create request Pixelforge didn't accept, by kind rather than error code or HTTP status: _Busy_ (rate limit or overload, retried), _Not Yet_ (the account's concurrency limit, waited out), _No Verdict_ (an undocumented server error; Pixelforge may have created it), _Key Refused_ (our API key, resent once fixed) or _Permanent_ (can never succeed, failed at once).
+_Avoid_: rejection, error
+
+**Unknown Outcome**:
+Set once any Submission Attempt got no Answer or a No Verdict Refusal: Pixelforge may hold the Generation, so it stays `pending` for reconciliation's resends instead of failing after 5 attempts.
+_Avoid_: maybe-created, lost
+
 ## Money
 
 **Provider Cost**:
