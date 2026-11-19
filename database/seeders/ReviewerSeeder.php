@@ -10,8 +10,10 @@ use App\Enums\Size;
 use App\Models\Generation;
 use App\Models\User;
 use App\Models\WebhookEvent;
+use App\Pixelforge\Answer;
 use App\Pixelforge\GenerationErrorCode;
 use App\Pixelforge\GenerationSnapshot;
+use App\Pixelforge\Refusal;
 use App\Pricing\Pricing;
 use App\Pricing\Rates;
 use App\Pricing\Usage;
@@ -61,21 +63,24 @@ class ReviewerSeeder extends Seeder
         // The Pixelforge docs' example usage.
         $succeeded = $this->pending($reviewer, $prompts['[succeed]'], Size::Landscape, Quality::High, ['https://example.com/style.png']);
         $lifecycle->apply($succeeded, $this->snapshot($succeeded, GenerationStatus::Succeeded, usage: new Usage(12, 765, 6_450, 3_184)));
+        $lifecycle->recordSubmissionAttempt($succeeded, Answer::accepted());
 
         // Each Webhook Event arrived twice; the second delivery of each was a no-op.
         $duplicate = $this->pending($reviewer, $prompts['[duplicate]'], Size::Square, Quality::Low, []);
         $duplicate = $lifecycle->apply($duplicate, $this->snapshot($duplicate, GenerationStatus::Succeeded, usage: new Usage(14, 0, 280, 312)));
+        $lifecycle->recordSubmissionAttempt($duplicate, Answer::accepted());
         $this->webhookEventsFor($duplicate);
 
         $failed = $this->pending($reviewer, $prompts['[fail]'], Size::Square, Quality::Low, []);
         $lifecycle->apply($failed, $this->snapshot($failed, GenerationStatus::Failed, error: [GenerationErrorCode::GenerationFailed, "The model couldn't produce an image for this prompt."]));
+        $lifecycle->recordSubmissionAttempt($failed, Answer::accepted());
 
         $blocked = $this->pending($reviewer, $prompts['[blocked]'], Size::Square, Quality::Low, []);
-        $lifecycle->failSubmission($blocked, GenerationErrorCode::ContentPolicyViolation, 'This prompt was rejected by our content policy.');
+        $lifecycle->recordSubmissionAttempt($blocked, Answer::refused(Refusal::Permanent, GenerationErrorCode::ContentPolicyViolation->value, 'This prompt was rejected by our content policy.'));
     }
 
     /**
-     * A Generation as Generate saves it, after its one create request.
+     * A Generation as Generate saves it, before its create request is recorded.
      *
      * @param  list<string>  $referenceImages
      */
@@ -89,7 +94,6 @@ class ReviewerSeeder extends Seeder
             'status' => GenerationStatus::Pending,
             'max_price' => Pricing::priceRange(mb_strlen($prompt), $size, $quality, count($referenceImages), Rates::fromPixelforge(self::RATES))->max,
         ]);
-        $generation->submission_attempts = 1;
         $generation->save();
 
         return $generation;

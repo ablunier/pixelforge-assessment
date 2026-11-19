@@ -5,8 +5,12 @@ namespace App\Actions;
 use App\Enums\GenerationStatus;
 use App\Jobs\StoreGenerationImage;
 use App\Models\Generation;
+use App\Pixelforge\Answer;
+use App\Pixelforge\Decision;
+use App\Pixelforge\Fail;
 use App\Pixelforge\GenerationErrorCode;
 use App\Pixelforge\GenerationSnapshot;
+use App\Pixelforge\SubmissionRules;
 use App\Pricing\Pricing;
 use Closure;
 use Illuminate\Support\Facades\DB;
@@ -58,21 +62,30 @@ final class GenerationLifecycle
     }
 
     /**
-     * End a Generation that Pixelforge never accepted (a rejected submission or
-     * exhausted retries) as `failed`, with no Provider Cost or Price. Ignored
-     * if the Generation has already moved on, e.g. through an early webhook.
-     * `$errorCode` is Pixelforge's code as sent (possibly one this app doesn't
-     * know yet) or a GenerationErrorCode.
+     * Record one create request and Pixelforge's answer to it (ADR-0005): count
+     * the attempt as SubmissionRules decides, and fail the Generation if they
+     * say so, all under the row lock, so concurrent attempts never miscount.
+     * Even an attempt that doesn't count renews `updated_at`, which keeps
+     * reconciliation from resubmitting a Generation still waiting its turn.
      */
-    public function failSubmission(Generation $generation, GenerationErrorCode|string $errorCode, ?string $errorMessage): Generation
+    public function recordSubmissionAttempt(Generation $generation, Answer $answer): Decision
     {
-        return $this->underLock($generation, function (Generation $generation) use ($errorCode, $errorMessage): void {
-            if ($generation->status->canMoveTo(GenerationStatus::Failed) && $generation->pixelforge_id === null) {
-                $generation->status = GenerationStatus::Failed;
-                $generation->error_code = $errorCode instanceof GenerationErrorCode ? $errorCode->value : $errorCode;
-                $generation->error_message = $errorMessage;
+        $decision = null;
+
+        $this->underLock($generation, function (Generation $generation) use ($answer, &$decision): void {
+            $decision = SubmissionRules::decide($answer, $generation->submission_attempts, $generation->submission_outcome_unknown, $generation->created_at, now());
+
+            $generation->submission_attempts = $decision->attempts;
+            $generation->submission_outcome_unknown = $decision->outcomeUnknown;
+            $generation->setUpdatedAt($generation->freshTimestamp());
+
+            if ($decision->next instanceof Fail) {
+                $this->failUnaccepted($generation, $decision->next->errorCode, $decision->next->errorMessage);
             }
         });
+
+        /** @var Decision $decision */
+        return $decision;
     }
 
     /**
@@ -107,6 +120,22 @@ final class GenerationLifecycle
 
             return $generation;
         });
+    }
+
+    /**
+     * End a Generation that Pixelforge never accepted (a rejected submission or
+     * exhausted retries) as `failed`, with no Provider Cost or Price. Ignored
+     * if the Generation has already moved on, e.g. through an early webhook,
+     * or once Pixelforge has its `gen_` id. `$errorCode` is Pixelforge's code
+     * as sent (possibly one this app doesn't know yet) or a GenerationErrorCode.
+     */
+    private function failUnaccepted(Generation $generation, GenerationErrorCode|string $errorCode, ?string $errorMessage): void
+    {
+        if ($generation->status->canMoveTo(GenerationStatus::Failed) && $generation->pixelforge_id === null) {
+            $generation->status = GenerationStatus::Failed;
+            $generation->error_code = $errorCode instanceof GenerationErrorCode ? $errorCode->value : $errorCode;
+            $generation->error_message = $errorMessage;
+        }
     }
 
     private function recordSuccess(Generation $generation, GenerationSnapshot $snapshot): void

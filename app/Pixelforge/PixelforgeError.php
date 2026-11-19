@@ -6,13 +6,11 @@ use Illuminate\Http\Client\Response;
 use RuntimeException;
 
 /**
- * Pixelforge rejected a request. Branch on `code` (or the helpers below),
- * never on the HTTP status.
+ * Pixelforge rejected a request. Branch on refusal(), never on the HTTP
+ * status.
  */
 final class PixelforgeError extends RuntimeException
 {
-    private const array RETRYABLE = ['rate_limit_exceeded', 'concurrency_limit_exceeded', 'overloaded'];
-
     public function __construct(
         public readonly string $errorCode,
         string $message,
@@ -38,41 +36,17 @@ final class PixelforgeError extends RuntimeException
     }
 
     /**
-     * A limit, an overload or a server error: the same request may succeed later.
+     * What kind of refusal this is. The error code decides; the HTTP status
+     * only tells an undocumented server error from a permanent rejection.
      */
-    public function isRetryable(): bool
+    public function refusal(): Refusal
     {
-        return in_array($this->errorCode, self::RETRYABLE, true) || $this->httpStatus >= 500;
-    }
-
-    /**
-     * A server error Pixelforge doesn't document, such as a gateway timeout:
-     * like a lost response, the request may still have been carried out.
-     * (`overloaded` is documented to create nothing.)
-     */
-    public function leavesOutcomeUnknown(): bool
-    {
-        return $this->httpStatus >= 500 && ! in_array($this->errorCode, self::RETRYABLE, true);
-    }
-
-    /**
-     * Pixelforge's per-account limit of 3 Generations in flight: "not yet", not "busy".
-     */
-    public function isConcurrencyLimit(): bool
-    {
-        return $this->errorCode === 'concurrency_limit_exceeded';
-    }
-
-    public function isAuthFailure(): bool
-    {
-        return $this->errorCode === 'invalid_api_key';
-    }
-
-    /**
-     * Retrying the same request can never succeed, e.g. `content_policy_violation`.
-     */
-    public function isPermanent(): bool
-    {
-        return ! $this->isRetryable() && ! $this->isAuthFailure();
+        return match (true) {
+            $this->errorCode === 'invalid_api_key' => Refusal::KeyRefused,
+            $this->errorCode === 'concurrency_limit_exceeded' => Refusal::NotYet,
+            in_array($this->errorCode, ['rate_limit_exceeded', 'overloaded'], true) => Refusal::Busy,
+            $this->httpStatus >= 500 => Refusal::NoVerdict,
+            default => Refusal::Permanent,
+        };
     }
 }
