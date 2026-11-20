@@ -92,7 +92,10 @@ class Generation extends Model
     /**
      * How long a succeeded Generation without a stored image waits between
      * downloads: longer than a whole run of StoreGenerationImage, its waits
-     * between tries and the tries themselves.
+     * between tries and the tries themselves. Time a try spends waiting in the
+     * queue or fetching a fresh URL isn't counted, so a busy queue can still
+     * see a second download start; that's harmless, as the job skips a
+     * Generation whose image is already stored.
      */
     public const int IMAGE_RETRY_AFTER_MINUTES = 16;
 
