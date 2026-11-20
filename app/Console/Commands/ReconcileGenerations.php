@@ -52,7 +52,8 @@ class ReconcileGenerations extends Command
     /**
      * Poll each quiet in-flight Generation and let the lifecycle reconcile it:
      * record what the poll found, and give up on it once it's still not final
-     * past its give-up deadline.
+     * past its give-up deadline. A failure with one Generation is reported and
+     * never stops the rest.
      */
     private function pollQuietInFlight(PixelforgeClient $pixelforge, GenerationLifecycle $lifecycle): void
     {
@@ -63,14 +64,30 @@ class ReconcileGenerations extends Command
                 try {
                     $snapshot = $pixelforge->retrieveGeneration((string) $generation->pixelforge_id);
                 } catch (Throwable $exception) {
-                    // Pixelforge unreachable, a 404, a response this app can't read:
-                    // try again next run, and never let one bad poll stop the rest.
+                    // Pixelforge unreachable, a 404, a response this app can't read: try again next run.
                     report($exception);
                     $snapshot = null;
                 }
 
-                $lifecycle->reconcile($generation, $snapshot);
+                try {
+                    $lifecycle->reconcile($generation, $snapshot);
+                } catch (Throwable $exception) {
+                    // The result couldn't be recorded, and the rollback undid any give-up with it.
+                    // Give up on its own, so a result that never records can't keep it in flight forever.
+                    report($exception);
+                    $this->reconcileWithoutSnapshot($lifecycle, $generation);
+                }
             });
+    }
+
+    /** Give up on the Generation if it's past its give-up deadline, reporting any failure. */
+    private function reconcileWithoutSnapshot(GenerationLifecycle $lifecycle, Generation $generation): void
+    {
+        try {
+            $lifecycle->reconcile($generation, null);
+        } catch (Throwable $exception) {
+            report($exception);
+        }
     }
 
     /**
