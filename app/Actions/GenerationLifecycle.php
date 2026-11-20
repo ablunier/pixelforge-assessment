@@ -33,30 +33,25 @@ final class GenerationLifecycle
      */
     public function apply(Generation $generation, GenerationSnapshot $snapshot): Generation
     {
+        return $this->underLock($generation, fn (Generation $generation) => $this->applyUnderLock($generation, $snapshot));
+    }
+
+    /**
+     * Reconciliation's poll of a quiet in-flight Generation: apply what the
+     * poll found (`null` when it failed), then give up if the Generation is
+     * still not final past its give-up deadline (ADR-0007). One lock covers
+     * both, so a Generation the last poll finds finished is recorded, never
+     * given up on.
+     */
+    public function reconcile(Generation $generation, ?GenerationSnapshot $snapshot): Generation
+    {
         return $this->underLock($generation, function (Generation $generation) use ($snapshot): void {
-            // A final Generation never changes, not even to learn its `gen_` id or rates (story 31).
-            if ($generation->status->isFinal()) {
-                return;
+            if ($snapshot !== null) {
+                $this->applyUnderLock($generation, $snapshot);
             }
 
-            // From whichever source reports them first, e.g. the create response or an early webhook.
-            $generation->pixelforge_id ??= $snapshot->pixelforgeId;
-
-            if ($generation->lockedRates() === null) {
-                $generation->lockRates($snapshot->rates);
-            }
-
-            if ($generation->status->canMoveTo($snapshot->status)) {
-                $generation->status = $snapshot->status;
-                $generation->provider_created_at ??= $snapshot->createdAt;
-                $generation->started_at ??= $snapshot->startedAt;
-                $generation->completed_at ??= $snapshot->completedAt;
-
-                match ($snapshot->status) {
-                    GenerationStatus::Succeeded => $this->recordSuccess($generation, $snapshot),
-                    GenerationStatus::Failed => $this->recordFailure($generation, $snapshot),
-                    default => null,
-                };
+            if ($generation->isPastGiveUpDeadline()) {
+                $this->giveUpUnderLock($generation);
             }
         });
     }
@@ -95,13 +90,7 @@ final class GenerationLifecycle
      */
     public function giveUp(Generation $generation): Generation
     {
-        return $this->underLock($generation, function (Generation $generation): void {
-            if ($generation->status->canMoveTo(GenerationStatus::Failed)) {
-                $generation->status = GenerationStatus::Failed;
-                $generation->error_code = GenerationErrorCode::NeverFinished->value;
-                $generation->error_message = null;
-            }
-        });
+        return $this->underLock($generation, fn (Generation $generation) => $this->giveUpUnderLock($generation));
     }
 
     /**
@@ -120,6 +109,43 @@ final class GenerationLifecycle
 
             return $generation;
         });
+    }
+
+    private function applyUnderLock(Generation $generation, GenerationSnapshot $snapshot): void
+    {
+        // A final Generation never changes, not even to learn its `gen_` id or rates (story 31).
+        if ($generation->status->isFinal()) {
+            return;
+        }
+
+        // From whichever source reports them first, e.g. the create response or an early webhook.
+        $generation->pixelforge_id ??= $snapshot->pixelforgeId;
+
+        if ($generation->lockedRates() === null) {
+            $generation->lockRates($snapshot->rates);
+        }
+
+        if ($generation->status->canMoveTo($snapshot->status)) {
+            $generation->status = $snapshot->status;
+            $generation->provider_created_at ??= $snapshot->createdAt;
+            $generation->started_at ??= $snapshot->startedAt;
+            $generation->completed_at ??= $snapshot->completedAt;
+
+            match ($snapshot->status) {
+                GenerationStatus::Succeeded => $this->recordSuccess($generation, $snapshot),
+                GenerationStatus::Failed => $this->recordFailure($generation, $snapshot),
+                default => null,
+            };
+        }
+    }
+
+    private function giveUpUnderLock(Generation $generation): void
+    {
+        if ($generation->status->canMoveTo(GenerationStatus::Failed)) {
+            $generation->status = GenerationStatus::Failed;
+            $generation->error_code = GenerationErrorCode::NeverFinished->value;
+            $generation->error_message = null;
+        }
     }
 
     /**
