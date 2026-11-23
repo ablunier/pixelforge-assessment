@@ -65,6 +65,41 @@ class Generation extends Model
     /** How many of a user's newest Generations the history shows. */
     public const int HISTORY_LIMIT = 50;
 
+    /*
+     * Reconciliation's timings. `updated_at` is the lease: anything that
+     * touches a Generation keeps reconciliation away from it for a while.
+     * tests/Unit/ReconciliationTimingTest.php holds them to the job timings
+     * they must outlast.
+     */
+
+    /**
+     * How long a `pending` Generation must go unchanged before it's resubmitted:
+     * longer than SubmissionRules::MAX_RETRY_DELAY_SECONDS, so a submit job
+     * waiting out a retry delay isn't resubmitted. The submit job is also
+     * unique per Generation, so a retry still waiting in a busy queue is never
+     * doubled up.
+     */
+    public const int PENDING_STALE_AFTER_SECONDS = 120;
+
+    /** How long a `queued` or `processing` Generation must go unchanged before it's polled. */
+    public const int POLL_STALE_AFTER_SECONDS = 60;
+
+    /**
+     * How long after pressing Generate an accepted Generation may stay
+     * `queued` or `processing` before it's given up on (ADR-0007).
+     */
+    public const int GIVE_UP_AFTER_MINUTES = 60;
+
+    /**
+     * How long a succeeded Generation without a stored image waits between
+     * downloads: longer than a whole run of StoreGenerationImage, its waits
+     * between tries and the tries themselves. Time a try spends waiting in the
+     * queue or fetching a fresh URL isn't counted, so a busy queue can still
+     * see a second download start; that's harmless, as the job skips a
+     * Generation whose image is already stored.
+     */
+    public const int IMAGE_RETRY_AFTER_MINUTES = 16;
+
     /**
      * @return array<string, string>
      */
@@ -137,6 +172,56 @@ class Generation extends Model
     }
 
     /**
+     * `pending` Generations unchanged for PENDING_STALE_AFTER_SECONDS: their
+     * submit job died, or left them for a resend (ADR-0005).
+     *
+     * @param  Builder<self>  $query
+     */
+    #[Scope]
+    protected function dueForResubmit(Builder $query): void
+    {
+        $query->where('status', GenerationStatus::Pending)
+            ->where('updated_at', '<', now()->subSeconds(self::PENDING_STALE_AFTER_SECONDS));
+    }
+
+    /**
+     * Accepted Generations still `queued` or `processing` and unchanged for
+     * POLL_STALE_AFTER_SECONDS.
+     *
+     * @param  Builder<self>  $query
+     */
+    #[Scope]
+    protected function dueForPoll(Builder $query): void
+    {
+        $query->whereIn('status', [GenerationStatus::Queued, GenerationStatus::Processing])
+            ->whereNotNull('pixelforge_id')
+            ->where('updated_at', '<', now()->subSeconds(self::POLL_STALE_AFTER_SECONDS));
+    }
+
+    /**
+     * Succeeded Generations with no stored image, a live provider image URL,
+     * and no download started for IMAGE_RETRY_AFTER_MINUTES.
+     *
+     * @param  Builder<self>  $query
+     */
+    #[Scope]
+    protected function dueForImageRetry(Builder $query): void
+    {
+        $query->where('status', GenerationStatus::Succeeded)
+            ->whereNull('image_path')
+            ->withLiveProviderImageUrl()
+            ->where('updated_at', '<', now()->subMinutes(self::IMAGE_RETRY_AFTER_MINUTES));
+    }
+
+    /**
+     * Whether the deadline for giving up on this Generation (ADR-0007) has passed.
+     */
+    public function isPastGiveUpDeadline(): bool
+    {
+        return $this->created_at?->addMinutes(self::GIVE_UP_AFTER_MINUTES)->isPast() === true;
+    }
+
+    /**
      * The rates Pixelforge locked when it accepted this Generation, once known.
      */
     public function lockedRates(): ?Rates
@@ -154,13 +239,26 @@ class Generation extends Model
         );
     }
 
-    /**
-     * Whether Pixelforge's signed image URL is known and hasn't expired yet.
+    /*
+     * A live provider image URL: Pixelforge's signed image URL is known and
+     * hasn't expired yet. hasLiveProviderImageUrl() checks it on a loaded
+     * Generation, withLiveProviderImageUrl() in a query; change both together.
      */
+
     public function hasLiveProviderImageUrl(): bool
     {
         return $this->provider_image_url !== null
             && $this->provider_image_url_expires_at?->isFuture() === true;
+    }
+
+    /**
+     * @param  Builder<self>  $query
+     */
+    #[Scope]
+    protected function withLiveProviderImageUrl(Builder $query): void
+    {
+        $query->whereNotNull('provider_image_url')
+            ->where('provider_image_url_expires_at', '>', now());
     }
 
     public function lockRates(Rates $rates): void

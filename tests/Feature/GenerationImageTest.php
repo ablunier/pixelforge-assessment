@@ -1,6 +1,5 @@
 <?php
 
-use App\Console\Commands\ReconcileGenerations;
 use App\Enums\GenerationStatus;
 use App\Jobs\StoreGenerationImage;
 use App\Models\Generation;
@@ -203,7 +202,7 @@ it('downloads the image again later once every try failed, while the image URL s
 
     expect(historyImage($user)['source'])->toBe('provider');
 
-    $this->travel(ReconcileGenerations::IMAGE_RETRY_AFTER_MINUTES)->minutes();
+    $this->travel(Generation::IMAGE_RETRY_AFTER_MINUTES)->minutes();
     $this->artisan('generations:reconcile')->assertSuccessful();
     runQueueWorker();
 
@@ -220,6 +219,19 @@ it('stops downloading the image again once the image URL has expired', function 
     Queue::fake();
 
     $this->travelTo('2026-11-05T14:03:30Z');
+    $this->artisan('generations:reconcile')->assertSuccessful();
+
+    Queue::assertNotPushed(StoreGenerationImage::class);
+});
+
+it('never downloads the image again for a succeeded Generation without an image URL', function () {
+    Generation::factory()->succeeded()->create([
+        'provider_image_url' => null,
+        'provider_image_url_expires_at' => now()->addDay(),
+        'updated_at' => now()->subMinutes(Generation::IMAGE_RETRY_AFTER_MINUTES + 1),
+    ]);
+    Queue::fake();
+
     $this->artisan('generations:reconcile')->assertSuccessful();
 
     Queue::assertNotPushed(StoreGenerationImage::class);

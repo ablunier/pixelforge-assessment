@@ -2,23 +2,23 @@
 
 A manual end-to-end check against the real Pixelforge sandbox, run by the owner in production before submission. It uses the reviewer account and leaves its Generations in place for the reviewers. Automated tests fake Pixelforge, so this is the only check against the real thing.
 
-Run the commands from `/opt/pixelforge` on the droplet. `pf` below is short for `docker compose -f compose.production.yaml`.
+Run the commands from `/opt/stacks/pixelforge` on the droplet. The `docker compose` commands below run the stack there.
 
 ## 1. Before you start
 
 - [ ] The latest `main` is deployed: `curl -fsS https://pixelforge.blunier.me/up`.
-- [ ] `/opt/pixelforge/.env` has the **production** key's `PIXELFORGE_API_KEY` and `PIXELFORGE_WEBHOOK_SECRET`, not the local ones.
+- [ ] `/opt/stacks/pixelforge/.env` has the **production** key's `PIXELFORGE_API_KEY` and `PIXELFORGE_WEBHOOK_SECRET`, not the local ones.
 - [ ] In the Pixelforge dashboard, the production key's webhook URL is exactly `https://pixelforge.blunier.me/webhooks/pixelforge`, with no trailing slash and over `https`: Pixelforge doesn't follow redirects.
 - [ ] Press **Send test event** in the dashboard. The delivery shows a `200` response, and the `ping` is stored:
 
     ```sh
-    pf exec app php artisan tinker --execute 'dump(App\Models\WebhookEvent::query()->where("type", "ping")->latest("id")->first()?->only("event_id", "received_at"));'
+    docker compose exec app php artisan tinker --execute 'dump(App\Models\WebhookEvent::query()->where("type", "ping")->latest("id")->first()?->only("event_id", "received_at"));'
     ```
 
 ## 2. Create the reviewer account and submit the examples
 
 ```sh
-pf exec -e REVIEWER_EMAIL=<reviewer-email> app php artisan reviewer:create --examples
+docker compose exec -e REVIEWER_EMAIL=<reviewer-email> app php artisan reviewer:create --examples
 ```
 
 - [ ] It prints `Password: ...` once. Save it in your password manager and send it privately with the submission. Never commit it or paste it into an issue. (Set `REVIEWER_PASSWORD` in `.env` instead if you want to choose it, then recreate the containers.)
@@ -31,7 +31,7 @@ The examples are low quality at 1024x1024, about $0.014 each at most. Three of t
 Log in at <https://pixelforge.blunier.me> as the reviewer and watch the history update live. Then check the stored values:
 
 ```sh
-pf exec app php artisan tinker --execute '
+docker compose exec app php artisan tinker --execute '
 $reviewer = App\Models\User::query()->where("email", "<reviewer-email>")->sole();
 dump($reviewer->generations()->oldest()->get()->map(fn ($g) => [
     "prompt" => $g->prompt, "status" => $g->status->value, "error" => $g->error_code,
@@ -48,7 +48,7 @@ dump($reviewer->generations()->oldest()->get()->map(fn ($g) => [
 | `[slow]`       | Stays `processing` for 60 to 90 s, then succeeds.                                                        | As `[succeed]`. Live polling stops only once it's final.                                                                                                                               |
 | `[duplicate]`  | Succeeds once, with one Price.                                                                           | Each event type is stored **once** although Pixelforge sent each twice; `price` = `provider_cost` × 1.25. The dashboard (step 4) shows two deliveries per event id, both answered 200. |
 | `[blocked]`    | Ends `failed` straight away with "Blocked by content policy" and no Price.                               | `error` = `content_policy_violation`, no `gen_` id, no events, `provider_cost` and `price` empty.                                                                                      |
-| `[overloaded]` | Stays "Submitting…" while it retries, then ends `failed` with "Provider busy, gave up after 5 attempts". | `error` = `retries_exhausted`, no `gen_` id, `price` empty. The queue log (`pf logs queue`) shows the retries spaced out by `Retry-After` and the backoff.                             |
+| `[overloaded]` | Stays "Submitting…" while it retries, then ends `failed` with "Provider busy, gave up after 5 attempts". | `error` = `retries_exhausted`, no `gen_` id, `price` empty. The queue log (`docker compose logs queue`) shows the retries spaced out by `Retry-After` and the backoff.                 |
 
 - [ ] All six behave as in the table.
 - [ ] Press "Try again" on the `[fail]` Generation: a new Generation with the same parameters appears and fails the same way. The original keeps its own outcome.
@@ -67,7 +67,7 @@ A Generation is billed on the UTC day it completed. Compare Pixelforge's usage f
 curl -fsS "https://pixelforge.promptedit.dev/v1/usage?start_date=<yyyy-mm-dd>&end_date=<yyyy-mm-dd>" \
   -H "Authorization: Bearer $PIXELFORGE_API_KEY"
 
-pf exec app php artisan tinker --execute '
+docker compose exec app php artisan tinker --execute '
 $day = Carbon\CarbonImmutable::parse("<yyyy-mm-dd>", "UTC");
 $done = App\Models\Generation::query()->where("status", "succeeded")->whereBetween("completed_at", [$day, $day->endOfDay()])->get();
 dump(["generations" => $done->count(), "cost_usd" => $done->reduce(fn ($sum, $g) => $sum->plus($g->provider_cost), App\Money\Money::ofNanodollars(0))->formatExact()]);'
