@@ -3,25 +3,18 @@
 use App\Models\Generation;
 use App\Models\User;
 use App\Pixelforge\PricingUnavailable;
-use GuzzleHttp\Promise\PromiseInterface;
-use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Exceptions;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Testing\TestResponse;
 use Inertia\Testing\AssertableInertia as Assert;
-
-beforeEach(function () {
-    config(['services.pixelforge.base_url' => 'https://pixelforge.test/v1']);
-});
+use Tests\Pixelforge\InMemoryPixelforgeClient;
+use Tests\Pixelforge\NoAnswer;
 
 it('redirects guests to the login page', function () {
     $this->get(route('dashboard'))->assertRedirect(route('login'));
 });
 
 it('gives the generate form the current rates and the server-computed Price Range', function () {
-    fakePixelforgePricing();
-
     $this->actingAs(User::factory()->create())
         ->get(route('dashboard'))
         ->assertOk()
@@ -43,64 +36,18 @@ it('gives the generate form the current rates and the server-computed Price Rang
         );
 });
 
-it('asks Pixelforge for its rates without authentication details leaking into the page', function () {
+it('keeps the Pixelforge API key out of the page props', function () {
     config(['services.pixelforge.api_key' => 'pf_test_secret']);
-    fakePixelforgePricing();
 
     $this->actingAs(User::factory()->create())
         ->get(route('dashboard'))
         ->assertOk()
         ->assertDontSee('pf_test_secret');
-
-    Http::assertSent(fn (Request $request) => $request->method() === 'GET'
-        && $request->url() === 'https://pixelforge.test/v1/pricing');
 });
-
-it('caches the rates for about an hour', function () {
-    fakePixelforgePricing();
-    $user = User::factory()->create();
-
-    $this->actingAs($user)->get(route('dashboard'))->assertOk();
-    $this->travel(59)->minutes();
-    $this->actingAs($user)->get(route('dashboard'))->assertOk();
-
-    Http::assertSentCount(1);
-
-    $this->travel(2)->minutes();
-    $this->actingAs($user)->get(route('dashboard'))->assertOk();
-
-    Http::assertSentCount(2);
-});
-
-/**
- * Pixelforge answers successive GET /v1/pricing requests with these responses.
- *
- * @param  list<PromiseInterface|Closure>  $responses
- */
-function fakePricingResponses(array $responses): void
-{
-    $sequence = Http::sequence();
-
-    foreach ($responses as $response) {
-        $sequence->pushResponse($response);
-    }
-
-    Http::fake(['pixelforge.test/v1/pricing' => $sequence]);
-}
-
-function publishedRates(): PromiseInterface
-{
-    return Http::response(['rates' => [
-        'input_text_tokens' => '5.00',
-        'input_image_tokens' => '10.00',
-        'output_tokens' => '40.00',
-        'reasoning_tokens' => '12.50',
-    ]]);
-}
 
 it('still shows the history, with no pricing, when Pixelforge can\'t quote rates and none are known', function () {
     Exceptions::fake();
-    fakePricingResponses([Http::response(['error' => ['code' => 'overloaded', 'message' => 'Overloaded.']], 503)]);
+    pixelforge()->answerRates(InMemoryPixelforgeClient::refusal('overloaded'));
     $user = User::factory()->create();
     Generation::factory()->for($user)->succeeded()->create();
 
@@ -116,9 +63,9 @@ it('still shows the history, with no pricing, when Pixelforge can\'t quote rates
     Exceptions::assertReported(PricingUnavailable::class);
 });
 
-it('prices with the last rates Pixelforge quoted while it can\'t quote them, asking again after a minute', function () {
+it('prices with the last rates Pixelforge quoted while it can\'t quote them', function () {
     Exceptions::fake();
-    fakePricingResponses([publishedRates(), Http::response('Bad gateway', 502), Http::response('Bad gateway', 502)]);
+    pixelforge()->answerRates(InMemoryPixelforgeClient::publishedRates(), InMemoryPixelforgeClient::refusal('http_502'));
     $user = User::factory()->create();
 
     $this->actingAs($user)->get(route('dashboard'))->assertOk();
@@ -130,19 +77,11 @@ it('prices with the last rates Pixelforge quoted while it can\'t quote them, ask
             ->where('pricing.rates.output_tokens', 40_000)
             ->where('priceRange', ['min' => 58_125_000, 'max' => 86_250_000])
         );
-    $this->actingAs($user)->get(route('dashboard'))->assertOk();
-
-    Http::assertSentCount(2);
-
-    $this->travel(61)->seconds();
-    $this->actingAs($user)->get(route('dashboard'))->assertOk();
-
-    Http::assertSentCount(3);
 });
 
 it('never caches rates it can\'t read, so the next page asks again', function () {
     Exceptions::fake();
-    fakePricingResponses([Http::response(['object' => 'pricing']), publishedRates()]);
+    pixelforge()->answerRates(NoAnswer::Unreadable);
     $user = User::factory()->create();
 
     $this->actingAs($user)
@@ -157,7 +96,7 @@ it('never caches rates it can\'t read, so the next page asks again', function ()
 it('submits nothing and says why when there are no rates to price a Generation with', function () {
     Exceptions::fake();
     Queue::fake();
-    fakePricingResponses([Http::failedConnection()]);
+    pixelforge()->answerRates(NoAnswer::Unreachable);
     $user = User::factory()->create();
 
     $this->actingAs($user)

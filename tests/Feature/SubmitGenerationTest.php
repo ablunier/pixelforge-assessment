@@ -8,14 +8,10 @@ use App\Jobs\SubmitGenerationToPixelforge;
 use App\Models\Generation;
 use App\Models\User;
 use Illuminate\Support\Facades\Queue;
-
-beforeEach(function () {
-    config(['services.pixelforge.base_url' => 'https://pixelforge.test/v1']);
-});
+use Tests\Pixelforge\InMemoryPixelforgeClient;
 
 it('saves a submitted Generation as pending with its server-computed Maximum Price and queues its submission', function () {
     Queue::fake();
-    fakePixelforgePricing();
     $user = User::factory()->create();
 
     $this->actingAs($user)
@@ -37,7 +33,7 @@ it('saves a submitted Generation as pending with its server-computed Maximum Pri
         ->and($generation->reference_images)->toBe(['https://example.com/style.png'])
         ->and($generation->max_price)->toEqual(
             (new GenerationParameters('A lighthouse on a cliff at dawn, oil painting', Size::Landscape, Quality::High, ['https://example.com/style.png']))
-                ->maximumPrice(pixelforgeRates()),
+                ->maximumPrice(InMemoryPixelforgeClient::publishedRates()),
         )
         ->and($generation->price)->toBeNull();
 
@@ -46,7 +42,6 @@ it('saves a submitted Generation as pending with its server-computed Maximum Pri
 
 it('saves nothing when the submitted form is invalid', function () {
     Queue::fake();
-    fakePixelforgePricing();
 
     $this->actingAs(User::factory()->create())
         ->post(route('generations.store'), ['prompt' => '', 'size' => '1024x1024', 'quality' => 'medium', 'reference_images' => []])

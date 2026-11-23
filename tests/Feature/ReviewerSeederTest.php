@@ -52,7 +52,6 @@ it('records the duplicate-delivery example once, with one stored Webhook Event p
 });
 
 it('seeds failures with no Provider Cost or Price and a readable reason', function () {
-    fakePixelforgePricing();
     $this->seed();
 
     foreach (['[fail]', '[blocked]'] as $keyword) {

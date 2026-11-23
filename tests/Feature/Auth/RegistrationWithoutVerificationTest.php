@@ -1,8 +1,6 @@
 <?php
 
 it('lets a newly registered user open the dashboard without verifying their email', function () {
-    fakePixelforgePricing();
-
     $this->post(route('register.store'), [
         'name' => 'Test User',
         'email' => 'test@example.com',

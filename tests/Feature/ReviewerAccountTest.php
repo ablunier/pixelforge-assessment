@@ -6,8 +6,8 @@ use App\Models\Generation;
 use App\Models\User;
 use App\Pixelforge\PricingUnavailable;
 use Illuminate\Support\Facades\Artisan;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
+use Tests\Pixelforge\NoAnswer;
 
 /**
  * Run reviewer:create and return what it printed.
@@ -79,7 +79,6 @@ it('changes the password when run again with a new one configured', function () 
 
 it('submits one Generation per sandbox keyword to Pixelforge with --examples', function () {
     config(['reviewer.email' => 'reviewer@example.com', 'reviewer.password' => 'a-long-secret-password']);
-    fakePixelforgePricing();
     Queue::fake();
 
     createReviewer(['--examples' => true]);
@@ -97,7 +96,6 @@ it('submits one Generation per sandbox keyword to Pixelforge with --examples', f
 
 it('only submits the examples the reviewer is missing when run again', function () {
     config(['reviewer.email' => 'reviewer@example.com', 'reviewer.password' => 'a-long-secret-password']);
-    fakePixelforgePricing();
     Queue::fake();
     createReviewer(['--examples' => true]);
     Generation::query()->where('prompt', 'like', '%[slow]%')->delete();
@@ -111,7 +109,7 @@ it('only submits the examples the reviewer is missing when run again', function 
 
 it('stops with the pricing failure, submitting nothing, when there are no rates to price the examples with', function () {
     config(['reviewer.email' => 'reviewer@example.com', 'reviewer.password' => 'a-long-secret-password']);
-    Http::fake(['*/v1/pricing' => Http::failedConnection()]);
+    pixelforge()->answerRates(NoAnswer::Unreachable);
     Queue::fake();
 
     expect(fn () => Artisan::call('reviewer:create', ['--examples' => true]))->toThrow(PricingUnavailable::class);

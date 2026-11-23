@@ -4,21 +4,15 @@ use App\Enums\GenerationStatus;
 use App\Jobs\StoreGenerationImage;
 use App\Models\Generation;
 use App\Models\User;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
-
-beforeEach(function () {
-    config(['services.pixelforge.base_url' => 'https://pixelforge.test/v1']);
-    fakePixelforgePricing();
-});
+use Tests\Pixelforge\InMemoryPixelforgeClient;
+use Tests\Pixelforge\Reported;
 
 const LIGHTHOUSE_ID = 'gen_01JC2Z8Q4N6V0M3H7X5T9R2B1K';
 
 const LIGHTHOUSE_IMAGE_URL = 'https://images.pixelforge.test/lighthouse.png';
-
-const LIGHTHOUSE_PNG = "\x89PNG\r\n\x1a\nlighthouse";
 
 /**
  * A lighthouse Generation that Pixelforge is processing and that has gone quiet,
@@ -36,31 +30,6 @@ function processingLighthouse(?User $user = null): Generation
     test()->travelTo('2026-11-04T14:05:00Z');
 
     return $generation;
-}
-
-/**
- * Pixelforge answers each poll of the lighthouse with the next of these
- * succeeded Generations' overrides.
- *
- * @param  array<string, mixed>  ...$polls
- */
-function fakeLighthouseSucceeds(array ...$polls): void
-{
-    $sequence = Http::sequence();
-
-    foreach ($polls ?: [[]] as $overrides) {
-        $sequence->push(pixelforgeGeneration('succeeded', ['image_url' => LIGHTHOUSE_IMAGE_URL, ...$overrides]));
-    }
-
-    Http::fake(['pixelforge.test/v1/generations/'.LIGHTHOUSE_ID => $sequence]);
-}
-
-/**
- * Pixelforge serves the lighthouse PNG at its image URL.
- */
-function fakeLighthouseImage(): void
-{
-    Http::fake([LIGHTHOUSE_IMAGE_URL => Http::response(LIGHTHOUSE_PNG, 200, ['Content-Type' => 'image/png'])]);
 }
 
 /**
@@ -99,14 +68,13 @@ function historyImage(User $user): ?array
 it('stores the image of a succeeded Generation and serves it to its owner', function () {
     $user = User::factory()->create();
     $generation = processingLighthouse($user);
-    fakeLighthouseSucceeds();
-    fakeLighthouseImage();
+    pixelforge()->answerRetrieves($generation, Reported::succeeded(imageUrl: LIGHTHOUSE_IMAGE_URL));
 
     $this->artisan('generations:reconcile')->assertSuccessful();
 
     $response = $this->actingAs($user)->get(route('generations.image', $generation))->assertOk();
 
-    expect($response->streamedContent())->toBe(LIGHTHOUSE_PNG)
+    expect($response->streamedContent())->toBe(InMemoryPixelforgeClient::PNG)
         ->and($response->headers->get('Content-Type'))->toBe('image/png')
         ->and(historyImage($user))->toBe([
             'source' => 'stored',
@@ -119,20 +87,18 @@ it('stores the image of a succeeded Generation and serves it to its owner', func
 it('lets the owner download the full-size image', function () {
     $user = User::factory()->create();
     $generation = processingLighthouse($user);
-    fakeLighthouseSucceeds();
-    fakeLighthouseImage();
+    pixelforge()->answerRetrieves($generation, Reported::succeeded(imageUrl: LIGHTHOUSE_IMAGE_URL));
     $this->artisan('generations:reconcile')->assertSuccessful();
 
     $response = $this->actingAs($user)->get(route('generations.image.download', $generation))->assertOk();
 
-    expect($response->streamedContent())->toBe(LIGHTHOUSE_PNG)
+    expect($response->streamedContent())->toBe(InMemoryPixelforgeClient::PNG)
         ->and($response->headers->get('Content-Disposition'))->toContain("pixelforge-{$generation->id}.png");
 });
 
 it('denies another user the image of a Generation', function () {
     $generation = processingLighthouse();
-    fakeLighthouseSucceeds();
-    fakeLighthouseImage();
+    pixelforge()->answerRetrieves($generation, Reported::succeeded(imageUrl: LIGHTHOUSE_IMAGE_URL));
     $this->artisan('generations:reconcile')->assertSuccessful();
 
     $this->actingAs(User::factory()->create());
@@ -144,8 +110,7 @@ it('denies another user the image of a Generation', function () {
 it('shows the provider image in the history until the download completes', function () {
     $user = User::factory()->create();
     $generation = processingLighthouse($user);
-    fakeLighthouseSucceeds();
-    fakeLighthouseImage();
+    pixelforge()->answerRetrieves($generation, Reported::succeeded(imageUrl: LIGHTHOUSE_IMAGE_URL));
     queueJobsForWorker();
 
     $this->artisan('generations:reconcile')->assertSuccessful();
@@ -165,9 +130,9 @@ it('shows the provider image in the history until the download completes', funct
 
 it('retries a failed download with backoff', function () {
     $user = User::factory()->create();
-    processingLighthouse($user);
-    fakeLighthouseSucceeds();
-    Http::fake([LIGHTHOUSE_IMAGE_URL => Http::sequence()->push('Bad gateway', 502)->push(LIGHTHOUSE_PNG)]);
+    $generation = processingLighthouse($user);
+    pixelforge()->answerRetrieves($generation, Reported::succeeded(imageUrl: LIGHTHOUSE_IMAGE_URL));
+    pixelforge()->answerDownloads(InMemoryPixelforgeClient::refusal('http_502'));
     queueJobsForWorker();
     $this->artisan('generations:reconcile')->assertSuccessful();
 
@@ -185,12 +150,9 @@ it('retries a failed download with backoff', function () {
 
 it('downloads the image again later once every try failed, while the image URL still works', function () {
     $user = User::factory()->create();
-    processingLighthouse($user);
-    fakeLighthouseSucceeds();
-    Http::fake([LIGHTHOUSE_IMAGE_URL => Http::sequence()->dontFailWhenEmpty()
-        ->push('Bad gateway', 502)->push('Bad gateway', 502)->push('Bad gateway', 502)
-        ->push('Bad gateway', 502)->push('Bad gateway', 502)
-        ->push(LIGHTHOUSE_PNG)]);
+    $generation = processingLighthouse($user);
+    pixelforge()->answerRetrieves($generation, Reported::succeeded(imageUrl: LIGHTHOUSE_IMAGE_URL));
+    pixelforge()->answerDownloads(...array_fill(0, 5, InMemoryPixelforgeClient::refusal('http_502')));
     queueJobsForWorker();
     $this->artisan('generations:reconcile')->assertSuccessful();
 
@@ -212,7 +174,7 @@ it('downloads the image again later once every try failed, while the image URL s
 it('stops downloading the image again once the image URL has expired', function () {
     $user = User::factory()->create();
     $generation = processingLighthouse($user);
-    fakeLighthouseSucceeds();
+    pixelforge()->answerRetrieves($generation, Reported::succeeded(imageUrl: LIGHTHOUSE_IMAGE_URL));
     queueJobsForWorker();
     $this->artisan('generations:reconcile')->assertSuccessful();
     $generation->refresh();
@@ -239,9 +201,9 @@ it('never downloads the image again for a succeeded Generation without an image 
 
 it('refuses to store a download that isn\'t a PNG', function () {
     $user = User::factory()->create();
-    processingLighthouse($user);
-    fakeLighthouseSucceeds();
-    Http::fake([LIGHTHOUSE_IMAGE_URL => Http::response('<html>Sign in to continue</html>', 200, ['Content-Type' => 'text/html'])]);
+    $generation = processingLighthouse($user);
+    pixelforge()->answerRetrieves($generation, Reported::succeeded(imageUrl: LIGHTHOUSE_IMAGE_URL));
+    pixelforge()->answerDownloads('<html>Sign in to continue</html>');
     queueJobsForWorker();
     $this->artisan('generations:reconcile')->assertSuccessful();
 
@@ -254,22 +216,22 @@ it('refuses to store a download that isn\'t a PNG', function () {
 it('fetches a fresh signed URL from Pixelforge when the stored one has expired', function () {
     $user = User::factory()->create();
     $generation = processingLighthouse($user);
-    fakeLighthouseSucceeds(
-        ['image_url' => 'https://images.pixelforge.test/stale.png', 'image_url_expires_at' => '2026-11-04T14:04:00Z'],
-        ['image_url' => LIGHTHOUSE_IMAGE_URL],
+    pixelforge()->answerRetrieves(
+        $generation,
+        Reported::succeeded(imageUrl: 'https://images.pixelforge.test/stale.png', imageUrlExpiresAt: '2026-11-04T14:04:00Z'),
+        Reported::succeeded(imageUrl: LIGHTHOUSE_IMAGE_URL),
     );
-    fakeLighthouseImage();
 
     $this->artisan('generations:reconcile')->assertSuccessful();
 
-    expect($this->actingAs($user)->get(route('generations.image', $generation))->streamedContent())->toBe(LIGHTHOUSE_PNG);
-    Http::assertNotSent(fn ($request) => $request->url() === 'https://images.pixelforge.test/stale.png');
+    expect($this->actingAs($user)->get(route('generations.image', $generation))->streamedContent())->toBe(InMemoryPixelforgeClient::PNG);
+    expect(pixelforge()->downloads())->toBe([LIGHTHOUSE_IMAGE_URL]);
 });
 
 it('shows an expired image once the provider URL has expired without a stored copy', function () {
     $user = User::factory()->create();
-    processingLighthouse($user);
-    fakeLighthouseSucceeds();
+    $generation = processingLighthouse($user);
+    pixelforge()->answerRetrieves($generation, Reported::succeeded(imageUrl: LIGHTHOUSE_IMAGE_URL));
     queueJobsForWorker();
     $this->artisan('generations:reconcile')->assertSuccessful();
 

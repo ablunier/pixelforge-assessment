@@ -3,26 +3,39 @@
 namespace Tests;
 
 use App\Jobs\StoreGenerationImage;
+use App\Pixelforge\CachingPixelforgeClient;
+use App\Pixelforge\PixelforgeClient;
+use Illuminate\Contracts\Cache\Repository as Cache;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Fortify\Features;
+use Tests\Pixelforge\InMemoryPixelforgeClient;
 
 abstract class TestCase extends BaseTestCase
 {
+    private InMemoryPixelforgeClient $pixelforge;
+
     protected function setUp(): void
     {
         parent::setUp();
 
-        // Tests never call the real Pixelforge API: every request must be faked.
+        // Tests never call the real Pixelforge API: Pixelforge is held in memory,
+        // behind the same rate caching as in production, and any other request must be faked.
+        $this->pixelforge = new InMemoryPixelforgeClient;
+        $this->app->instance(PixelforgeClient::class, new CachingPixelforgeClient($this->pixelforge, $this->app->make(Cache::class)));
         Http::preventStrayRequests();
 
-        // A succeeded Generation's image is downloaded to this disk. Tests that
-        // need the download to behave differently use another image URL.
+        // A succeeded Generation's image is downloaded to this disk.
         Storage::fake(StoreGenerationImage::DISK);
-        Http::fake([
-            'pixelforge.promptedit.dev/images/*' => Http::response("\x89PNG\r\n\x1a\n", 200, ['Content-Type' => 'image/png']),
-        ]);
+    }
+
+    /**
+     * The in-memory Pixelforge this test's app talks to.
+     */
+    public function pixelforge(): InMemoryPixelforgeClient
+    {
+        return $this->pixelforge;
     }
 
     protected function skipUnlessFortifyHas(string $feature, ?string $message = null): void

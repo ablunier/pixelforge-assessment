@@ -4,22 +4,67 @@ use App\Enums\GenerationStatus;
 use App\Jobs\SubmitGenerationToPixelforge;
 use App\Models\Generation;
 use App\Models\WebhookEvent;
-use Illuminate\Http\Client\Request;
 use Illuminate\Http\Response;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Testing\TestResponse;
+use Tests\Pixelforge\InMemoryPixelforgeClient;
+use Tests\Pixelforge\Reported;
 
 const WEBHOOK_SECRET = 'whsec_test_secret';
 
 beforeEach(function () {
-    config([
-        'services.pixelforge.base_url' => 'https://pixelforge.test/v1',
-        'services.pixelforge.api_key' => 'pf_test_key',
-        'services.pixelforge.webhook_secret' => WEBHOOK_SECRET,
-    ]);
+    config(['services.pixelforge.webhook_secret' => WEBHOOK_SECRET]);
     // On the docs' timeline, so a succeeded Generation's image URL hasn't expired yet.
     $this->travelTo('2026-11-04T14:03:00Z');
 });
+
+/**
+ * A Pixelforge Generation object, as a Webhook Event's `data.object`, shaped
+ * like the docs' examples: the lighthouse prompt at 1536x1024, high quality,
+ * with one reference image.
+ *
+ * @param  array<string, mixed>  $overrides
+ * @return array<string, mixed>
+ */
+function webhookGeneration(string $status, array $overrides = []): array
+{
+    $generation = [
+        'id' => 'gen_01JC2Z8Q4N6V0M3H7X5T9R2B1K',
+        'object' => 'generation',
+        'status' => $status,
+        'prompt' => 'A lighthouse on a cliff at dawn, oil painting',
+        'size' => '1536x1024',
+        'quality' => 'high',
+        'reference_images' => ['https://example.com/style.png'],
+        'metadata' => [],
+        'image_url' => null,
+        'image_url_expires_at' => null,
+        'usage' => null,
+        'rates' => [
+            'input_text_tokens' => '5.00',
+            'input_image_tokens' => '10.00',
+            'output_tokens' => '40.00',
+            'reasoning_tokens' => '12.50',
+        ],
+        'error' => null,
+        'created_at' => '2026-11-04T14:03:11Z',
+        'started_at' => in_array($status, ['processing', 'succeeded', 'failed'], true) ? '2026-11-04T14:03:13Z' : null,
+        'completed_at' => in_array($status, ['succeeded', 'failed'], true) ? '2026-11-04T14:03:29Z' : null,
+    ];
+
+    if ($status === 'succeeded') {
+        $generation['image_url'] = 'https://pixelforge.promptedit.dev/images/gen_01JC2Z8Q4N6V0M3H7X5T9R2B1K.png?expires=1762351409&signature=abc';
+        $generation['image_url_expires_at'] = '2026-11-05T14:03:29Z';
+        $generation['usage'] = [
+            'input_text_tokens' => 12,
+            'input_image_tokens' => 765,
+            'output_tokens' => 6450,
+            'reasoning_tokens' => 3184,
+            'total_tokens' => 10411,
+        ];
+    }
+
+    return array_replace($generation, $overrides);
+}
 
 /**
  * A Webhook Event carrying `$generation` as `data.object`, shaped like the docs' example.
@@ -47,7 +92,7 @@ function webhookEvent(string $type, array $generation, string $id = 'evt_01JC2Z9
  */
 function pixelforgeGenerationFor(Generation $generation, string $status, array $overrides = []): array
 {
-    return pixelforgeGeneration($status, ['metadata' => ['generation_id' => $generation->id], ...$overrides]);
+    return webhookGeneration($status, ['metadata' => ['generation_id' => $generation->id], ...$overrides]);
 }
 
 /**
@@ -249,31 +294,31 @@ it('records a failure reported by webhook, with no Price', function () {
 });
 
 it('matches a webhook that arrives before the create response by the local id in metadata', function () {
-    fakePixelforgePricing();
     $generation = Generation::factory()->create();
+    $pixelforgeId = InMemoryPixelforgeClient::pixelforgeIdFor($generation->id);
 
     // Pixelforge sends `generation.processing` while the create request is still in flight.
-    Http::fake(['pixelforge.test/v1/generations' => function (Request $request) use ($generation) {
-        deliverWebhook(webhookEvent('generation.processing', pixelforgeGenerationFor($generation, 'processing')))->assertOk();
+    pixelforge()->answerCreates(function () use ($generation, $pixelforgeId) {
+        deliverWebhook(webhookEvent('generation.processing', pixelforgeGenerationFor($generation, 'processing', ['id' => $pixelforgeId])))->assertOk();
 
         expect($generation->refresh()->status)->toBe(GenerationStatus::Processing)
-            ->and($generation->pixelforge_id)->toBe('gen_01JC2Z8Q4N6V0M3H7X5T9R2B1K');
+            ->and($generation->pixelforge_id)->toBe($pixelforgeId);
 
-        return Http::response(pixelforgeGeneration('queued', ['metadata' => $request['metadata']]), 202);
-    }]);
+        return Reported::queued();
+    });
 
     SubmitGenerationToPixelforge::dispatchSync($generation);
     $generation->refresh();
 
     // The late `queued` create response doesn't move it back.
     expect($generation->status)->toBe(GenerationStatus::Processing)
-        ->and($generation->pixelforge_id)->toBe('gen_01JC2Z8Q4N6V0M3H7X5T9R2B1K')
+        ->and($generation->pixelforge_id)->toBe($pixelforgeId)
         ->and(WebhookEvent::query()->sole()->generation_id)->toBe($generation->id);
 });
 
 it('treats a webhook as a no-op once polling has already found the Generation succeeded', function () {
     $generation = Generation::factory()->accepted(GenerationStatus::Processing)->create(['pixelforge_id' => 'gen_01JC2Z8Q4N6V0M3H7X5T9R2B1K']);
-    Http::fake(['pixelforge.test/v1/generations/gen_01JC2Z8Q4N6V0M3H7X5T9R2B1K' => Http::response(pixelforgeGenerationFor($generation, 'succeeded'))]);
+    pixelforge()->answerRetrieves($generation, Reported::succeeded());
 
     $this->travel(61)->seconds();
     $this->artisan('generations:reconcile')->assertSuccessful();
@@ -300,7 +345,7 @@ it('treats a webhook as a no-op once polling has already found the Generation su
 it('matches a Generation by its Pixelforge id when metadata does not name it', function () {
     $generation = Generation::factory()->accepted()->create(['pixelforge_id' => 'gen_01JC2Z8Q4N6V0M3H7X5T9R2B1K']);
 
-    deliverWebhook(webhookEvent('generation.processing', pixelforgeGeneration('processing', ['metadata' => []])))
+    deliverWebhook(webhookEvent('generation.processing', webhookGeneration('processing', ['metadata' => []])))
         ->assertOk();
 
     expect($generation->refresh()->status)->toBe(GenerationStatus::Processing)
@@ -310,7 +355,7 @@ it('matches a Generation by its Pixelforge id when metadata does not name it', f
 it('acknowledges and stores a Webhook Event that matches no Generation', function () {
     $generation = Generation::factory()->accepted()->create(['pixelforge_id' => 'gen_01JC2Z8Q4N6V0M3H7X5T9R2B1K']);
 
-    deliverWebhook(webhookEvent('generation.processing', pixelforgeGeneration('processing', [
+    deliverWebhook(webhookEvent('generation.processing', webhookGeneration('processing', [
         'id' => 'gen_01JC9UNKNOWN00000000000000',
         'metadata' => ['generation_id' => '01JC9UNKNOWN00000000000000'],
     ])))->assertOk();

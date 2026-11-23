@@ -30,7 +30,7 @@ Domain language lives in `GLOSSARY.md`; decisions in `docs/adr/`. Code must agre
 - Names describe the expected behaviour: `it('releases the Hold when a Generation fails')`.
 - Every new route, Action, job and value object has tests covering the happy path plus the relevant failure, authorization and validation cases.
 - Money, ledger and Generation Status code needs tests for the edge cases the ADRs call out: duplicate or out-of-order Webhook Events, forward-only status transitions, one Charge per Generation, Holds released on failure.
-- Never call the real Pixelforge API in tests. Use `Http::fake()` and `Queue::fake()` / `Event::fake()` as needed. Use model factories, not hand-built rows.
+- Never call the real Pixelforge API in tests. The base test case binds `PixelforgeClient` to an in-memory Pixelforge (`tests/Pixelforge/InMemoryPixelforgeClient.php`, reached with `pixelforge()`): script its answers and assert on what it was asked, in domain terms. Use `Http::fake()` for Pixelforge only in `HttpPixelforgeClient`'s wire-contract tests. Use `Queue::fake()` / `Event::fake()` as needed, and model factories, not hand-built rows.
 - A bug fix includes a regression test that fails without the fix.
 - `composer test` (lint, Larastan, `artisan test`) and `npm run ci:check` must pass.
 

@@ -38,6 +38,30 @@ final readonly class Rates implements JsonSerializable
     }
 
     /**
+     * Rebuild from jsonSerialize()'s integer nanodollars per token, or null
+     * when the value isn't exactly that shape (say, one stored before the
+     * shape changed).
+     */
+    public static function tryFromNanodollarsPerToken(mixed $perToken): ?self
+    {
+        $keys = ['input_text_tokens', 'input_image_tokens', 'output_tokens', 'reasoning_tokens'];
+
+        if (! is_array($perToken)
+            || array_diff($keys, array_keys($perToken)) !== []
+            || count($perToken) !== count($keys)
+            || array_filter($perToken, is_int(...)) !== $perToken) {
+            return null;
+        }
+
+        return new self(
+            Money::ofNanodollars($perToken['input_text_tokens']),
+            Money::ofNanodollars($perToken['input_image_tokens']),
+            Money::ofNanodollars($perToken['output_tokens']),
+            Money::ofNanodollars($perToken['reasoning_tokens']),
+        );
+    }
+
+    /**
      * Each rate as integer nanodollars per token, keyed like Pixelforge's.
      *
      * @return array{input_text_tokens: int, input_image_tokens: int, output_tokens: int, reasoning_tokens: int}

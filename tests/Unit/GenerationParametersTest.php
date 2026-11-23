@@ -3,6 +3,7 @@
 use App\Enums\Quality;
 use App\Enums\Size;
 use App\Generations\GenerationParameters;
+use Tests\Pixelforge\InMemoryPixelforgeClient;
 
 function lighthouseParameters(): GenerationParameters
 {
@@ -10,7 +11,7 @@ function lighthouseParameters(): GenerationParameters
 }
 
 it('prices the range from its prompt length, size, quality and reference image count', function () {
-    $range = lighthouseParameters()->priceRange(pixelforgeRates());
+    $range = lighthouseParameters()->priceRange(InMemoryPixelforgeClient::publishedRates());
 
     // 45 characters → 12 text tokens, 10 to 14; 765 image and 6,450 output tokens;
     // 1,000 to 8,000 reasoning tokens. Provider Costs $0.278200000 to $0.365720000, plus 25% Markup.
@@ -19,13 +20,13 @@ it('prices the range from its prompt length, size, quality and reference image c
 });
 
 it('has the top of its Price Range as its Maximum Price', function () {
-    expect(lighthouseParameters()->maximumPrice(pixelforgeRates())->nanodollars())->toBe(457_150_000);
+    expect(lighthouseParameters()->maximumPrice(InMemoryPixelforgeClient::publishedRates())->nanodollars())->toBe(457_150_000);
 });
 
 it('counts the prompt in characters, not bytes', function () {
     $ascii = new GenerationParameters(str_repeat('a', 400), Size::Square, Quality::Low, []);
     $multibyte = new GenerationParameters(str_repeat('é', 400), Size::Square, Quality::Low, []);
 
-    expect($multibyte->maximumPrice(pixelforgeRates())->nanodollars())
-        ->toBe($ascii->maximumPrice(pixelforgeRates())->nanodollars());
+    expect($multibyte->maximumPrice(InMemoryPixelforgeClient::publishedRates())->nanodollars())
+        ->toBe($ascii->maximumPrice(InMemoryPixelforgeClient::publishedRates())->nanodollars());
 });
