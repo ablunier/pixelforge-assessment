@@ -8,8 +8,8 @@ export type GenerationTotals = {
 };
 
 /**
- * The Provider Cost set beside what Pixelforge billed, from App\Reports\CostComparison.
- * Both are null when Pixelforge's usage couldn't be had (or doesn't cover the day).
+ * The Provider Cost set beside what Pixelforge billed. Both are null when
+ * Pixelforge's usage couldn't be had.
  */
 export type ReportCostComparison = {
     pixelforgeBilled: number | null;
@@ -17,15 +17,14 @@ export type ReportCostComparison = {
     costDifference: number | null;
 };
 
-/** One UTC day of the admin report, from App\Reports\DailyRow. */
-export type ReportDay = GenerationTotals &
-    ReportCostComparison & {
-        /** The UTC day, as YYYY-MM-DD. */
-        date: string;
-    };
-
-/** The report's totals: the figures and the comparison with Pixelforge's total. */
+/** Totals beside what Pixelforge billed, from App\Reports\ComparedTotals. */
 export type ReportTotals = GenerationTotals & ReportCostComparison;
+
+/** One UTC day of the admin report, from App\Reports\DailyRow. */
+export type ReportDay = ReportTotals & {
+    /** The UTC day, as YYYY-MM-DD. */
+    date: string;
+};
 
 /** One user's figures over the range, from App\Reports\UserRow. */
 export type ReportUser = GenerationTotals & {

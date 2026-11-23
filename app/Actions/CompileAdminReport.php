@@ -13,6 +13,7 @@ use App\Pixelforge\PixelforgeError;
 use App\Pixelforge\PixelforgeUnreachable;
 use App\Pixelforge\UnexpectedPixelforgeResponse;
 use App\Reports\AdminReport;
+use App\Reports\ComparedTotals;
 use App\Reports\DailyRow;
 use App\Reports\DateRange;
 use App\Reports\GenerationTotals;
@@ -47,7 +48,7 @@ class CompileAdminReport
         $billed = $this->billed($range);
 
         $days = array_map(
-            fn (string $date): DailyRow => new DailyRow($date, $byDay[$date] ?? GenerationTotals::none(), $billed?->on($date)),
+            fn (string $date): DailyRow => new DailyRow($date, new ComparedTotals($byDay[$date] ?? GenerationTotals::none(), $billed?->on($date))),
             $range->dates(),
         );
 

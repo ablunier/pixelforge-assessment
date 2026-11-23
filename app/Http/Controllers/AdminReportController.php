@@ -26,7 +26,7 @@ class AdminReportController extends Controller
             ],
             'days' => $report->days,
             'users' => $report->users,
-            'totals' => [...$report->totals()->jsonSerialize(), ...$report->totalCostComparison()->jsonSerialize()],
+            'totals' => $report->totals(),
             'pixelforgeReachable' => $report->billed !== null,
         ]);
     }

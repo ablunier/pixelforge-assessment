@@ -22,17 +22,17 @@ final readonly class AdminReport
         public ?PixelforgeBilled $billed,
     ) {}
 
-    public function totals(): GenerationTotals
+    /**
+     * The totals over every day, beside the total Pixelforge billed.
+     */
+    public function totals(): ComparedTotals
     {
-        return array_reduce(
+        $totals = array_reduce(
             $this->days,
-            fn (GenerationTotals $total, DailyRow $day): GenerationTotals => $total->plus($day->totals),
+            fn (GenerationTotals $total, DailyRow $day): GenerationTotals => $total->plus($day->compared->totals),
             GenerationTotals::none(),
         );
-    }
 
-    public function totalCostComparison(): CostComparison
-    {
-        return new CostComparison($this->totals()->providerCost, $this->billed?->total);
+        return new ComparedTotals($totals, $this->billed?->total);
     }
 }
