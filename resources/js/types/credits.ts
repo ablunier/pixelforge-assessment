@@ -19,3 +19,9 @@ export type LedgerEntry = {
     generation: { id: string; prompt: string } | null;
     createdAt: string;
 };
+
+/** Which page of the ledger history is shown, 1-based, of how many. */
+export type LedgerPage = {
+    current: number;
+    last: number;
+};
