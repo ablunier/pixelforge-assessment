@@ -5,6 +5,7 @@ namespace App\Http\Requests;
 use App\Concerns\GenerationLimits;
 use App\Enums\Quality;
 use App\Enums\Size;
+use App\Generations\GenerationParameters;
 use App\Models\User;
 use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
@@ -46,30 +47,17 @@ class StoreGenerationRequest extends FormRequest
         return $this->generationLimits($user);
     }
 
-    public function prompt(): string
-    {
-        return $this->string('prompt')->toString();
-    }
-
-    public function size(): Size
-    {
-        return Size::from($this->string('size')->toString());
-    }
-
-    public function quality(): Quality
-    {
-        return Quality::from($this->string('quality')->toString());
-    }
-
-    /**
-     * @return list<string>
-     */
-    public function referenceImages(): array
+    public function parameters(): GenerationParameters
     {
         /** @var array<int, string> $referenceImages */
         $referenceImages = $this->validated('reference_images');
 
-        return array_values($referenceImages);
+        return new GenerationParameters(
+            $this->string('prompt')->toString(),
+            Size::from($this->string('size')->toString()),
+            Quality::from($this->string('quality')->toString()),
+            array_values($referenceImages),
+        );
     }
 
     /**

@@ -4,8 +4,10 @@ use App\Enums\GenerationStatus;
 use App\Jobs\SubmitGenerationToPixelforge;
 use App\Models\Generation;
 use App\Models\User;
+use App\Pixelforge\PricingUnavailable;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Queue;
+use Tests\Pixelforge\NoAnswer;
 
 /**
  * Run reviewer:create and return what it printed.
@@ -103,6 +105,17 @@ it('only submits the examples the reviewer is missing when run again', function 
     expect(Generation::query()->count())->toBe(6)
         ->and(Generation::query()->where('prompt', 'like', '%[slow]%')->count())->toBe(1);
     Queue::assertPushed(SubmitGenerationToPixelforge::class, 7);
+});
+
+it('stops with the pricing failure, submitting nothing, when there are no rates to price the examples with', function () {
+    config(['reviewer.email' => 'reviewer@example.com', 'reviewer.password' => 'a-long-secret-password']);
+    pixelforge()->answerRates(NoAnswer::Unreachable);
+    Queue::fake();
+
+    expect(fn () => Artisan::call('reviewer:create', ['--examples' => true]))->toThrow(PricingUnavailable::class);
+
+    expect(Generation::query()->count())->toBe(0);
+    Queue::assertNothingPushed();
 });
 
 it('submits nothing to Pixelforge without --examples', function () {

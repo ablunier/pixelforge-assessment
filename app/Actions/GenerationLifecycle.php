@@ -3,8 +3,10 @@
 namespace App\Actions;
 
 use App\Enums\GenerationStatus;
+use App\Generations\GenerationParameters;
 use App\Jobs\StoreGenerationImage;
 use App\Models\Generation;
+use App\Models\User;
 use App\Pixelforge\Answer;
 use App\Pixelforge\Decision;
 use App\Pixelforge\Fail;
@@ -12,21 +14,40 @@ use App\Pixelforge\GenerationErrorCode;
 use App\Pixelforge\GenerationSnapshot;
 use App\Pixelforge\SubmissionRules;
 use App\Pricing\Pricing;
+use App\Pricing\Rates;
 use Closure;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 
 /**
- * The one place a Generation's status and money change. Every provider
- * snapshot (create response, poll or Webhook Event) goes through apply().
+ * The one place a Generation is opened and its status and money change.
+ * Every `pending` Generation starts in open(), and every provider snapshot
+ * (create response, poll or Webhook Event) goes through apply().
  *
- * Each change runs in a transaction holding the Generation's row lock, and
+ * Each change to an opened Generation runs in a transaction holding its row lock, and
  * status only moves forward (GenerationStatus::canMoveTo()), so duplicate,
  * stale or out-of-order snapshots are ignored and the single transition into
  * `succeeded` records the Price exactly once.
  */
 final class GenerationLifecycle
 {
+    /**
+     * Open a Generation: save it as `pending` with the Maximum Price its
+     * parameters have at `$rates`. Submitting it to Pixelforge is the
+     * caller's job.
+     */
+    public function open(User $user, GenerationParameters $parameters, Rates $rates): Generation
+    {
+        return DB::transaction(fn (): Generation => $user->generations()->create([
+            'prompt' => $parameters->prompt,
+            'size' => $parameters->size,
+            'quality' => $parameters->quality,
+            'reference_images' => $parameters->referenceImages,
+            'status' => GenerationStatus::Pending,
+            'max_price' => $parameters->maximumPrice($rates),
+        ]));
+    }
+
     /**
      * Apply Pixelforge's view of a Generation. `$generation` only identifies
      * the row, which is re-read under lock; the saved Generation is returned.
