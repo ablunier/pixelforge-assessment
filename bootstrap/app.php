@@ -19,7 +19,7 @@ return Application::configure(basePath: dirname(__DIR__))
         },
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        // In production the app is only reachable through Caddy, which
+        // In production the app is only reachable through the shared Caddy, which
         // terminates TLS and forwards the original scheme and host.
         $middleware->trustProxies(at: '*');
 
