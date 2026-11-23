@@ -11,7 +11,8 @@ class AdminReportController extends Controller
 {
     /**
      * The admin report: daily and per-user Generations, Charges, Provider
-     * Cost and Profit over a date range. The route lets only admins in.
+     * Cost and Profit over a date range, each Provider Cost beside what
+     * Pixelforge billed. The route lets only admins in.
      */
     public function __invoke(AdminReportRequest $request, CompileAdminReport $compile): Response
     {
@@ -25,7 +26,8 @@ class AdminReportController extends Controller
             ],
             'days' => $report->days,
             'users' => $report->users,
-            'totals' => $report->totals(),
+            'totals' => [...$report->totals()->jsonSerialize(), ...$report->totalCostComparison()->jsonSerialize()],
+            'pixelforgeReachable' => $report->billed !== null,
         ]);
     }
 }

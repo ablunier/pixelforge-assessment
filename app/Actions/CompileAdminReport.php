@@ -7,6 +7,11 @@ use App\Enums\LedgerEntryKind;
 use App\Models\Generation;
 use App\Models\User;
 use App\Money\Money;
+use App\Pixelforge\BilledCosts;
+use App\Pixelforge\PixelforgeClient;
+use App\Pixelforge\PixelforgeError;
+use App\Pixelforge\PixelforgeUnreachable;
+use App\Pixelforge\UnexpectedPixelforgeResponse;
 use App\Reports\AdminReport;
 use App\Reports\DailyRow;
 use App\Reports\DateRange;
@@ -20,9 +25,14 @@ use Illuminate\Support\Collection;
  * Generations, counted on the UTC day they completed (as Pixelforge bills),
  * with their Provider Costs and Charges. A Generation from before Balances
  * existed has no Charge and counts as zero user spend.
+ *
+ * Each day's Provider Cost is set beside what Pixelforge billed that day. If
+ * Pixelforge's usage can't be had, the report still shows the local figures.
  */
 class CompileAdminReport
 {
+    public function __construct(private readonly PixelforgeClient $pixelforge) {}
+
     public function handle(DateRange $range): AdminReport
     {
         $buckets = $this->figuresByDayAndUser($range);
@@ -34,12 +44,29 @@ class CompileAdminReport
             $byUser[$userId] = ($byUser[$userId] ?? Figures::none())->plus($figures);
         }
 
+        $billed = $this->billedCosts($range);
+
         $days = array_map(
-            fn (string $date): DailyRow => new DailyRow($date, $byDay[$date] ?? Figures::none()),
+            fn (string $date): DailyRow => new DailyRow($date, $byDay[$date] ?? Figures::none(), $billed?->on($date)),
             $range->dates(),
         );
 
-        return new AdminReport($range, $days, $this->userRows($byUser));
+        return new AdminReport($range, $days, $this->userRows($byUser), $billed);
+    }
+
+    /**
+     * What Pixelforge billed over the range, or null when it can't be had
+     * (rate limited, overloaded, our API key refused, unreachable or unreadable).
+     */
+    private function billedCosts(DateRange $range): ?BilledCosts
+    {
+        try {
+            return $this->pixelforge->billedCosts($range->from, $range->to);
+        } catch (PixelforgeError|PixelforgeUnreachable|UnexpectedPixelforgeResponse $failure) {
+            report($failure);
+
+            return null;
+        }
     }
 
     /**

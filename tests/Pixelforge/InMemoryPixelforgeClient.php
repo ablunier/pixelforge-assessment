@@ -5,12 +5,15 @@ namespace Tests\Pixelforge;
 use App\Enums\Quality;
 use App\Enums\Size;
 use App\Models\Generation;
+use App\Money\Money;
+use App\Pixelforge\BilledCosts;
 use App\Pixelforge\GenerationSnapshot;
 use App\Pixelforge\PixelforgeClient;
 use App\Pixelforge\PixelforgeError;
 use App\Pixelforge\PixelforgeUnreachable;
 use App\Pixelforge\UnexpectedPixelforgeResponse;
 use App\Pricing\Rates;
+use Carbon\CarbonImmutable;
 use Closure;
 use InvalidArgumentException;
 
@@ -46,6 +49,12 @@ final class InMemoryPixelforgeClient implements PixelforgeClient
 
     /** @var list<string|PixelforgeError|NoAnswer> */
     private array $downloadAnswers = [];
+
+    /** @var list<BilledCosts|PixelforgeError|NoAnswer> */
+    private array $usageAnswers = [];
+
+    /** @var list<UsageRequest> */
+    private array $usageRequests = [];
 
     /** @var list<CreateRequest> */
     private array $createRequests = [];
@@ -139,6 +148,29 @@ final class InMemoryPixelforgeClient implements PixelforgeClient
     }
 
     /**
+     * What the next usage requests get, in order. After these, Pixelforge
+     * reports nothing billed on any day.
+     */
+    public function answerUsage(BilledCosts|PixelforgeError|NoAnswer ...$answers): void
+    {
+        array_push($this->usageAnswers, ...$answers);
+    }
+
+    /**
+     * Pixelforge reporting it billed `$byDate` (nanodollars by `Y-m-d`) and,
+     * unless told otherwise, their sum in total.
+     *
+     * @param  array<string, int>  $byDate
+     */
+    public static function billed(array $byDate, ?int $total = null): BilledCosts
+    {
+        return new BilledCosts(
+            array_map(Money::ofNanodollars(...), $byDate),
+            Money::ofNanodollars($total ?? array_sum($byDate)),
+        );
+    }
+
+    /**
      * What the next image downloads get, in order: the bytes served (which
      * needn't be a PNG), an error status from the image host as a
      * PixelforgeError, or no answer. After these, the image host serves PNG at
@@ -184,6 +216,14 @@ final class InMemoryPixelforgeClient implements PixelforgeClient
         return $this->downloads;
     }
 
+    /**
+     * @return list<UsageRequest>
+     */
+    public function usageRequests(): array
+    {
+        return $this->usageRequests;
+    }
+
     public function rateRequests(): int
     {
         return $this->rateRequests;
@@ -207,6 +247,23 @@ final class InMemoryPixelforgeClient implements PixelforgeClient
         }
 
         throw self::failure($answer);
+    }
+
+    public function billedCosts(CarbonImmutable $startDate, CarbonImmutable $endDate): BilledCosts
+    {
+        $this->usageRequests[] = new UsageRequest($startDate->toDateString(), $endDate->toDateString());
+        $answer = array_shift($this->usageAnswers);
+
+        if ($answer === null) {
+            $days = [];
+            for ($day = $startDate; ! $day->isAfter($endDate); $day = $day->addDay()) {
+                $days[$day->toDateString()] = 0;
+            }
+
+            return self::billed($days);
+        }
+
+        return $answer instanceof BilledCosts ? $answer : throw self::failure($answer);
     }
 
     public function createGeneration(string $generationId, string $prompt, Size $size, Quality $quality, array $referenceImages): GenerationSnapshot
