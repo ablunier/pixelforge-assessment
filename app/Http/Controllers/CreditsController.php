@@ -27,7 +27,7 @@ class CreditsController extends Controller
                 'amount' => $pack->amount()->nanodollars(),
             ], CreditPack::cases()),
             'ledgerEntries' => LedgerEntryResource::collection(
-                $request->user()->ledgerEntries()->latest()->latest('id')->limit(self::HISTORY_LIMIT)->get(),
+                $request->user()->ledgerEntries()->with('generation:id,prompt')->latest()->latest('id')->limit(self::HISTORY_LIMIT)->get(),
             )->resolve($request),
         ]);
     }

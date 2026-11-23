@@ -1,7 +1,10 @@
 <?php
 
+use App\Models\Generation;
 use App\Models\User;
+use App\Money\Money;
 use Inertia\Testing\AssertableInertia as Assert;
+use Tests\Pixelforge\Reported;
 
 it('gives a newly registered user a $1.00 Balance', function () {
     $this->post(route('register.store'), [
@@ -95,6 +98,35 @@ it('shows users only their own ledger and Balance', function () {
             ->where('balance', 5_000_000_000)
             ->has('ledgerEntries', 1)
             ->where('ledgerEntries.0.amount', 5_000_000_000));
+});
+
+it('names the Generation of each Hold, Hold release and Charge in the ledger history', function () {
+    $this->travelTo('2026-11-04T14:03:00Z');
+    $user = User::factory()->withTopUp(Money::ofNanodollars(1_000_000_000))->create();
+    $this->actingAs($user)->post(route('generations.store'), [
+        'prompt' => 'A lighthouse on a cliff at dawn, oil painting',
+        'size' => '1536x1024',
+        'quality' => 'high',
+        'reference_images' => ['https://example.com/style.png'],
+    ])->assertSessionHasNoErrors();
+    $generation = Generation::query()->sole();
+    pixelforge()->answerRetrieves($generation, Reported::succeeded());
+    $this->travel(61)->seconds();
+    $this->artisan('generations:reconcile')->assertSuccessful();
+
+    $named = ['id' => $generation->id, 'prompt' => 'A lighthouse on a cliff at dawn, oil painting'];
+
+    $this->get(route('credits.show'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('ledgerEntries', 4)
+            ->where('ledgerEntries.0.kind', 'hold_release')
+            ->where('ledgerEntries.0.generation', $named)
+            ->where('ledgerEntries.1.kind', 'charge')
+            ->where('ledgerEntries.1.generation', $named)
+            ->where('ledgerEntries.2.kind', 'hold')
+            ->where('ledgerEntries.2.generation', $named)
+            ->where('ledgerEntries.3.kind', 'top_up')
+            ->where('ledgerEntries.3.generation', null));
 });
 
 it('offers the $5, $10 and $25 packs', function () {
