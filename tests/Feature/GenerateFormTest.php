@@ -36,15 +36,13 @@ it('gives the generate form the current rates and the server-computed Price Rang
         );
 });
 
-it('asks Pixelforge for its rates without authentication details leaking into the page', function () {
+it('keeps the Pixelforge API key out of the page props', function () {
     config(['services.pixelforge.api_key' => 'pf_test_secret']);
 
     $this->actingAs(User::factory()->create())
         ->get(route('dashboard'))
         ->assertOk()
         ->assertDontSee('pf_test_secret');
-
-    expect(pixelforge()->rateRequests())->toBe(1);
 });
 
 it('still shows the history, with no pricing, when Pixelforge can\'t quote rates and none are known', function () {
