@@ -133,7 +133,7 @@ Live at <https://pixelforge.blunier.me>. Every push to `main` is tested and then
 The reviewer account is created in production with real Generations, one per sandbox keyword, so they match Pixelforge's own records. This is a deliberate departure from the spec's "a seeder creates … example Generations": `db:seed` still creates the account in production but skips the made-up examples, whose fake `gen_` ids and Provider Costs would never reconcile against Pixelforge's `GET /v1/usage` ([ADR-0008](docs/adr/0008-production-reviewer-examples.md)).
 
 ```sh
-docker compose -f compose.production.yaml exec -e REVIEWER_EMAIL=<reviewer-email> app php artisan reviewer:create --examples
+docker compose exec -e REVIEWER_EMAIL=<reviewer-email> app php artisan reviewer:create --examples
 ```
 
 [docs/sandbox-verification.md](docs/sandbox-verification.md) is the checklist for verifying `[succeed]`, `[fail]`, `[slow]`, `[duplicate]`, `[blocked]` and `[overloaded]` and the webhook deliveries against the real sandbox.

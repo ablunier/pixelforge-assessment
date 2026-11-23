@@ -1,7 +1,8 @@
 name: deploy
 
-# Every push to main is tested, then deployed to the droplet over SSH.
-# One-time setup and the required secrets are in docs/deploy.md.
+# Every push to main is tested, built into an image pushed to GHCR, then
+# deployed to the droplet over SSH. One-time setup and the required secrets
+# are in docs/deploy.md.
 
 on:
   push:
@@ -15,18 +16,68 @@ concurrency:
   group: deploy-production
   cancel-in-progress: false
 
+env:
+  IMAGE: ghcr.io/ablunier/pixelforge-assessment
+
 jobs:
   tests:
     uses: ./.github/workflows/tests.yml
 
-  deploy:
+  image:
     needs: tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ github.sha }}
+            ${{ env.IMAGE }}:latest
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: image
     runs-on: ubuntu-latest
     environment:
       name: production
       url: https://pixelforge.blunier.me
 
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/opt/stacks/pixelforge' }}
+
     steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
       - name: Configure SSH
         env:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
@@ -37,16 +88,19 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
 
+      - name: Copy the stack files
+        run: |
+          scp -i ~/.ssh/deploy_key -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            deploy/compose.yaml deploy/deploy.sh \
+            "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/"
+
       - name: Deploy over SSH
         env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-          DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/opt/pixelforge' }}
           SHA: ${{ github.sha }}
         run: |
           ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o StrictHostKeyChecking=yes \
             "$DEPLOY_USER@$DEPLOY_HOST" \
-            "cd '$DEPLOY_PATH' && scripts/deploy.sh '$SHA'"
+            "cd '$DEPLOY_PATH' && bash ./deploy.sh '$SHA'"
 
       - name: Check the public URL
         run: curl -fsS --retry 10 --retry-delay 6 --retry-all-errors https://pixelforge.blunier.me/up > /dev/null
