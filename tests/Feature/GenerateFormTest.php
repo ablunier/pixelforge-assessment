@@ -112,6 +112,7 @@ it('submits nothing and says why when there are no rates to price a Generation w
 
     expect($user->generations()->count())->toBe(0);
     Queue::assertNothingPushed();
+    Exceptions::assertReported(PricingUnavailable::class);
 });
 
 /**
