@@ -5,14 +5,8 @@ use App\Http\Middleware\HandleInertiaRequests;
 use App\Models\Generation;
 use App\Models\User;
 use App\Money\Money;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia as Assert;
-
-beforeEach(function () {
-    config(['services.pixelforge.base_url' => 'https://pixelforge.test/v1']);
-    fakePixelforgePricing();
-});
 
 it('lists the user\'s Generations newest first with status, Maximum Price, and Price or error once final', function () {
     $user = User::factory()->create();
@@ -142,7 +136,7 @@ it('refreshes only the history when polled, without asking Pixelforge for rates'
         ->assertJsonPath('props.pollHistory', true)
         ->assertJsonMissingPath('props.pricing');
 
-    Http::assertNothingSent();
+    expect(pixelforge()->ratesQuoted())->toBe(0);
 });
 
 it('shows a newly submitted Generation at the top of the history as pending, and keeps polling', function () {

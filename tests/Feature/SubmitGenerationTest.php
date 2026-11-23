@@ -6,13 +6,8 @@ use App\Models\Generation;
 use App\Models\User;
 use Illuminate\Support\Facades\Queue;
 
-beforeEach(function () {
-    config(['services.pixelforge.base_url' => 'https://pixelforge.test/v1']);
-});
-
 it('saves a submitted Generation as pending with its server-computed Maximum Price and queues its submission', function () {
     Queue::fake();
-    fakePixelforgePricing();
     $user = User::factory()->create();
 
     $this->actingAs($user)
@@ -42,7 +37,6 @@ it('saves a submitted Generation as pending with its server-computed Maximum Pri
 
 it('saves nothing when the submitted form is invalid', function () {
     Queue::fake();
-    fakePixelforgePricing();
 
     $this->actingAs(User::factory()->create())
         ->post(route('generations.store'), ['prompt' => '', 'size' => '1024x1024', 'quality' => 'medium', 'reference_images' => []])

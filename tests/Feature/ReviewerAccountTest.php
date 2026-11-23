@@ -77,7 +77,6 @@ it('changes the password when run again with a new one configured', function () 
 
 it('submits one Generation per sandbox keyword to Pixelforge with --examples', function () {
     config(['reviewer.email' => 'reviewer@example.com', 'reviewer.password' => 'a-long-secret-password']);
-    fakePixelforgePricing();
     Queue::fake();
 
     createReviewer(['--examples' => true]);
@@ -95,7 +94,6 @@ it('submits one Generation per sandbox keyword to Pixelforge with --examples', f
 
 it('only submits the examples the reviewer is missing when run again', function () {
     config(['reviewer.email' => 'reviewer@example.com', 'reviewer.password' => 'a-long-secret-password']);
-    fakePixelforgePricing();
     Queue::fake();
     createReviewer(['--examples' => true]);
     Generation::query()->where('prompt', 'like', '%[slow]%')->delete();

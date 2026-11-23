@@ -8,9 +8,7 @@ use App\Providers\AppServiceProvider;
 use Illuminate\Support\Facades\Queue;
 
 beforeEach(function () {
-    config(['services.pixelforge.base_url' => 'https://pixelforge.test/v1']);
     Queue::fake();
-    fakePixelforgePricing();
 });
 
 /**

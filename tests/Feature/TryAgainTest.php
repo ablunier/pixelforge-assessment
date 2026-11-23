@@ -10,9 +10,7 @@ use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia as Assert;
 
 beforeEach(function () {
-    config(['services.pixelforge.base_url' => 'https://pixelforge.test/v1']);
     Queue::fake();
-    fakePixelforgePricing();
 });
 
 it('creates a new pending Generation with the same parameters when trying a failed Generation again', function () {
