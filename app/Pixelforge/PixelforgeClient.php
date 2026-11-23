@@ -18,7 +18,7 @@ interface PixelforgeClient
      * @throws PixelforgeError when Pixelforge rejects the request
      * @throws PixelforgeUnreachable when Pixelforge can't be reached
      * @throws UnexpectedPixelforgeResponse when a success response isn't usable rates
-     * @throws PricingUnavailable when no rates can be had at all (a caching client, with none quoted before)
+     * @throws PricingUnavailable when no rates can be had, fresh or earlier ones
      */
     public function rates(): Rates;
 

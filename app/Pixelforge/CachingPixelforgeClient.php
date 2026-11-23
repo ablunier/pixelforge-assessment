@@ -4,7 +4,6 @@ namespace App\Pixelforge;
 
 use App\Enums\Quality;
 use App\Enums\Size;
-use App\Money\Money;
 use App\Pricing\Rates;
 use Illuminate\Contracts\Cache\Repository as Cache;
 
@@ -15,10 +14,7 @@ use Illuminate\Contracts\Cache\Repository as Cache;
  */
 final readonly class CachingPixelforgeClient implements PixelforgeClient
 {
-    /**
-     * Rates are cached as nanodollars per token (Rates::jsonSerialize()), under
-     * keys of their own: the HTTP adapter once cached Pixelforge's quotes as sent.
-     */
+    /** Rates are cached as nanodollars per token, as Rates::jsonSerialize() gives them. */
     private const string RATES_CACHE_KEY = 'pixelforge.rates-per-token';
 
     private const int RATES_CACHE_SECONDS = 3600;
@@ -33,6 +29,12 @@ final readonly class CachingPixelforgeClient implements PixelforgeClient
         private Cache $cache,
     ) {}
 
+    /**
+     * The current rates, cached for about an hour. While they can't be quoted,
+     * the last rates quoted, asking again after a minute.
+     *
+     * @throws PricingUnavailable when they can't be quoted and none ever were
+     */
     public function rates(): Rates
     {
         $cached = self::cachedRates($this->cache->get(self::RATES_CACHE_KEY));
@@ -73,16 +75,7 @@ final readonly class CachingPixelforgeClient implements PixelforgeClient
 
     private static function cachedRates(mixed $perToken): ?Rates
     {
-        if (! is_array($perToken)) {
-            return null;
-        }
-
-        return new Rates(
-            Money::ofNanodollars((int) $perToken['input_text_tokens']),
-            Money::ofNanodollars((int) $perToken['input_image_tokens']),
-            Money::ofNanodollars((int) $perToken['output_tokens']),
-            Money::ofNanodollars((int) $perToken['reasoning_tokens']),
-        );
+        return is_array($perToken) ? Rates::fromNanodollarsPerToken($perToken) : null;
     }
 
     public function createGeneration(string $generationId, string $prompt, Size $size, Quality $quality, array $referenceImages): GenerationSnapshot

@@ -54,7 +54,7 @@ function quotedRates(): Rates
     ]);
 }
 
-function laterRates(): Rates
+function changedRates(): Rates
 {
     return Rates::fromPixelforge([
         'input_text_tokens' => '1.00',
@@ -64,14 +64,14 @@ function laterRates(): Rates
     ]);
 }
 
-function caching(PixelforgeClient $pixelforge): CachingPixelforgeClient
+function cachingClientOver(PixelforgeClient $pixelforge): CachingPixelforgeClient
 {
     return new CachingPixelforgeClient($pixelforge, cache()->store());
 }
 
 it('caches the rates for about an hour', function () {
-    $pixelforge = scriptedRates(quotedRates(), laterRates());
-    $client = caching($pixelforge);
+    $pixelforge = scriptedRates(quotedRates(), changedRates());
+    $client = cachingClientOver($pixelforge);
 
     expect($client->rates())->toEqual(quotedRates());
     $this->travel(59)->minutes();
@@ -80,14 +80,14 @@ it('caches the rates for about an hour', function () {
 
     $this->travel(2)->minutes();
 
-    expect($client->rates())->toEqual(laterRates())
+    expect($client->rates())->toEqual(changedRates())
         ->and($pixelforge->ratesCalls)->toBe(2);
 });
 
 it('prices with the last rates quoted while they can\'t be quoted, asking again after a minute', function (Throwable $failure) {
     Exceptions::fake();
-    $pixelforge = scriptedRates(quotedRates(), $failure, laterRates());
-    $client = caching($pixelforge);
+    $pixelforge = scriptedRates(quotedRates(), $failure, changedRates());
+    $client = cachingClientOver($pixelforge);
 
     $client->rates();
     $this->travel(61)->minutes();
@@ -99,7 +99,7 @@ it('prices with the last rates quoted while they can\'t be quoted, asking again 
 
     $this->travel(61)->seconds();
 
-    expect($client->rates())->toEqual(laterRates())
+    expect($client->rates())->toEqual(changedRates())
         ->and($pixelforge->ratesCalls)->toBe(3);
 })->with([
     'unreachable' => fn () => new PixelforgeUnreachable('Connection refused.'),
@@ -109,7 +109,7 @@ it('prices with the last rates quoted while they can\'t be quoted, asking again 
 
 it('never caches rates it can\'t read, so the next call asks again', function () {
     $pixelforge = scriptedRates(new UnexpectedPixelforgeResponse('No rates.'), quotedRates());
-    $client = caching($pixelforge);
+    $client = cachingClientOver($pixelforge);
 
     expect(fn () => $client->rates())->toThrow(PricingUnavailable::class)
         ->and($client->rates())->toEqual(quotedRates())
@@ -117,10 +117,11 @@ it('never caches rates it can\'t read, so the next call asks again', function ()
 });
 
 it('is unavailable when no rates have ever been quoted', function (Throwable $failure) {
-    $client = caching(scriptedRates($failure));
+    $client = cachingClientOver(scriptedRates($failure));
 
     expect(fn () => $client->rates())->toThrow(PricingUnavailable::class);
 })->with([
     'unreachable' => fn () => new PixelforgeUnreachable('Connection refused.'),
     'refused' => fn () => new PixelforgeError('overloaded', 'Overloaded.', 503),
+    'unreadable' => fn () => new UnexpectedPixelforgeResponse('No rates.'),
 ]);

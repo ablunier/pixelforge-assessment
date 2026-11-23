@@ -38,6 +38,21 @@ final readonly class Rates implements JsonSerializable
     }
 
     /**
+     * Rebuild from jsonSerialize()'s integer nanodollars per token.
+     *
+     * @param  array<string, mixed>  $perToken
+     */
+    public static function fromNanodollarsPerToken(array $perToken): self
+    {
+        return new self(
+            Money::ofNanodollars((int) $perToken['input_text_tokens']),
+            Money::ofNanodollars((int) $perToken['input_image_tokens']),
+            Money::ofNanodollars((int) $perToken['output_tokens']),
+            Money::ofNanodollars((int) $perToken['reasoning_tokens']),
+        );
+    }
+
+    /**
      * Each rate as integer nanodollars per token, keyed like Pixelforge's.
      *
      * @return array{input_text_tokens: int, input_image_tokens: int, output_tokens: int, reasoning_tokens: int}
