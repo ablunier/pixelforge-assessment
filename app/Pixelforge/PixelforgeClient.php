@@ -43,9 +43,6 @@ interface PixelforgeClient
      * `$endDate` inclusive, from GET /v1/usage. Pixelforge reports at most 92
      * days at a time.
      *
-     * CachingPixelforgeClient caches the answer for a minute, so refreshing a
-     * page that shows it doesn't use up the rate limit.
-     *
      * @throws PixelforgeError when Pixelforge rejects the request
      * @throws PixelforgeUnreachable when Pixelforge can't be reached
      * @throws UnexpectedPixelforgeResponse when a success response isn't usable usage
