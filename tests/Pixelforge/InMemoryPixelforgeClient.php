@@ -12,6 +12,7 @@ use App\Pixelforge\PixelforgeUnreachable;
 use App\Pixelforge\UnexpectedPixelforgeResponse;
 use App\Pricing\Rates;
 use Closure;
+use InvalidArgumentException;
 
 /**
  * Pixelforge held in memory, for tests. It keeps each Generation it accepts by
@@ -138,12 +139,18 @@ final class InMemoryPixelforgeClient implements PixelforgeClient
     }
 
     /**
-     * What the next image downloads get, in order: the bytes served, a Refusal
-     * (an error status from the image host) or no answer. After these, the
-     * image host serves PNG at any URL.
+     * What the next image downloads get, in order: the bytes served (which
+     * needn't be a PNG), an error status from the image host as a
+     * PixelforgeError, or no answer. After these, the image host serves PNG at
+     * any URL. A download has no response to misread, so NoAnswer::Unreadable
+     * isn't an answer it can get.
      */
     public function answerDownloads(string|PixelforgeError|NoAnswer ...$answers): void
     {
+        if (in_array(NoAnswer::Unreadable, $answers, true)) {
+            throw new InvalidArgumentException('An image download gets bytes, an error status or no answer, never an unreadable response.');
+        }
+
         array_push($this->downloadAnswers, ...$answers);
     }
 
