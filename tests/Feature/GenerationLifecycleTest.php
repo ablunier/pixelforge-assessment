@@ -64,7 +64,7 @@ function reconcile(): void
 
 it('polls a Generation from queued through processing to succeeded and records its exact Price once', function () {
     $generation = generateLighthouse();
-    pixelforge()->reports($generation, Reported::processing(), Reported::succeeded());
+    pixelforge()->answerRetrieves($generation, Reported::processing(), Reported::succeeded());
 
     $this->travel(61)->seconds();
     reconcile();
@@ -97,7 +97,7 @@ it('caps the Price at the Maximum Price when Pixelforge locked higher rates than
     $doubled = Rates::fromPixelforge(['input_text_tokens' => '10.00', 'input_image_tokens' => '20.00', 'output_tokens' => '80.00', 'reasoning_tokens' => '25.00']);
     pixelforge()->answerCreates(Reported::queued(lockedRates: $doubled));
     $generation = generateLighthouse();
-    pixelforge()->reports($generation, Reported::succeeded());
+    pixelforge()->answerRetrieves($generation, Reported::succeeded());
 
     $this->travel(61)->seconds();
     reconcile();
@@ -122,7 +122,7 @@ it('runs reconciliation every minute, one run at a time', function () {
 
 it('only polls Generations that have not changed in over 60 seconds', function () {
     $generation = generateLighthouse();
-    pixelforge()->reports($generation, Reported::processing());
+    pixelforge()->answerRetrieves($generation, Reported::processing());
 
     $this->travel(59)->seconds();
     reconcile();
@@ -133,7 +133,7 @@ it('only polls Generations that have not changed in over 60 seconds', function (
 
 it('records the error and no Price when a Generation fails after acceptance', function () {
     $generation = generateLighthouse();
-    pixelforge()->reports($generation, Reported::failed('generation_failed', "The model couldn't produce an image for this prompt."));
+    pixelforge()->answerRetrieves($generation, Reported::failed('generation_failed', "The model couldn't produce an image for this prompt."));
 
     $this->travel(61)->seconds();
     reconcile();
@@ -153,7 +153,7 @@ it('records the error and no Price when a Generation fails after acceptance', fu
  */
 function reconcileOverlapping(Generation $generation, Reported $first, Reported $late): void
 {
-    pixelforge()->reports($generation, function () use ($late) {
+    pixelforge()->answerRetrieves($generation, function () use ($late) {
         reconcile();
 
         return $late;
@@ -206,8 +206,8 @@ it('keeps polling the other Generations when one poll returns a response this ap
     Exceptions::fake();
     $unreadable = Generation::factory()->accepted()->create(['pixelforge_id' => 'gen_UNREADABLE', 'updated_at' => now()->subMinutes(2)]);
     $later = Generation::factory()->accepted()->create(['pixelforge_id' => 'gen_01JC2Z8Q4N6V0M3H7X5T9R2B1K', 'updated_at' => now()->subMinutes(2)]);
-    pixelforge()->reports($unreadable, NoAnswer::Unreadable);
-    pixelforge()->reports($later, Reported::processing());
+    pixelforge()->answerRetrieves($unreadable, NoAnswer::Unreadable);
+    pixelforge()->answerRetrieves($later, Reported::processing());
 
     reconcile();
 
@@ -226,8 +226,8 @@ it('keeps polling the other Generations when recording one poll\'s result fails'
     Exceptions::fake();
     $unrecordable = Generation::factory()->accepted()->create(['pixelforge_id' => 'gen_UNRECORDABLE', 'updated_at' => now()->subMinutes(2)]);
     $later = Generation::factory()->accepted()->create(['pixelforge_id' => 'gen_01JC2Z8Q4N6V0M3H7X5T9R2B1K', 'updated_at' => now()->subMinutes(2)]);
-    pixelforge()->reports($unrecordable, unrecordableSuccess());
-    pixelforge()->reports($later, Reported::processing());
+    pixelforge()->answerRetrieves($unrecordable, unrecordableSuccess());
+    pixelforge()->answerRetrieves($later, Reported::processing());
 
     reconcile();
 
@@ -239,7 +239,7 @@ it('keeps polling the other Generations when recording one poll\'s result fails'
 it('gives up on a Generation whose last poll\'s result can\'t be recorded, once an hour has passed', function () {
     Exceptions::fake();
     $generation = Generation::factory()->accepted(GenerationStatus::Processing)->create(['pixelforge_id' => 'gen_UNRECORDABLE']);
-    pixelforge()->reports($generation, unrecordableSuccess());
+    pixelforge()->answerRetrieves($generation, unrecordableSuccess());
 
     $this->travel(Generation::GIVE_UP_AFTER_MINUTES + 1)->minutes();
     reconcile();
@@ -252,7 +252,7 @@ it('gives up on a Generation whose last poll\'s result can\'t be recorded, once 
 it('gives up on a Generation Pixelforge hasn\'t finished an hour after Generate, with no Price and a readable reason', function () {
     $generation = Generation::factory()->accepted(GenerationStatus::Processing)
         ->create(['pixelforge_id' => 'gen_01JC2Z8Q4N6V0M3H7X5T9R2B1K']);
-    pixelforge()->reports($generation, Reported::processing());
+    pixelforge()->answerRetrieves($generation, Reported::processing());
 
     $this->travel(Generation::GIVE_UP_AFTER_MINUTES - 1)->minutes();
     reconcile();
@@ -290,7 +290,7 @@ it('gives up on a Generation Pixelforge no longer knows, once an hour has passed
 it('records the Price when the last poll before giving up finds the Generation succeeded', function () {
     $generation = Generation::factory()->accepted(GenerationStatus::Processing)
         ->create(['pixelforge_id' => 'gen_01JC2Z8Q4N6V0M3H7X5T9R2B1K']);
-    pixelforge()->reports($generation, Reported::succeeded());
+    pixelforge()->answerRetrieves($generation, Reported::succeeded());
 
     $this->travel(Generation::GIVE_UP_AFTER_MINUTES + 1)->minutes();
     reconcile();

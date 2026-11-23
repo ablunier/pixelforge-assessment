@@ -136,7 +136,7 @@ it('refreshes only the history when polled, without asking Pixelforge for rates'
         ->assertJsonPath('props.pollHistory', true)
         ->assertJsonMissingPath('props.pricing');
 
-    expect(pixelforge()->ratesQuoted())->toBe(0);
+    expect(pixelforge()->rateRequests())->toBe(0);
 });
 
 it('shows a newly submitted Generation at the top of the history as pending, and keeps polling', function () {

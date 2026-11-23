@@ -44,12 +44,12 @@ it('asks Pixelforge for its rates without authentication details leaking into th
         ->assertOk()
         ->assertDontSee('pf_test_secret');
 
-    expect(pixelforge()->ratesQuoted())->toBe(1);
+    expect(pixelforge()->rateRequests())->toBe(1);
 });
 
 it('still shows the history, with no pricing, when Pixelforge can\'t quote rates and none are known', function () {
     Exceptions::fake();
-    pixelforge()->quotes(InMemoryPixelforgeClient::refusal('overloaded'));
+    pixelforge()->answerRates(InMemoryPixelforgeClient::refusal('overloaded'));
     $user = User::factory()->create();
     Generation::factory()->for($user)->succeeded()->create();
 
@@ -67,7 +67,7 @@ it('still shows the history, with no pricing, when Pixelforge can\'t quote rates
 
 it('prices with the last rates Pixelforge quoted while it can\'t quote them', function () {
     Exceptions::fake();
-    pixelforge()->quotes(InMemoryPixelforgeClient::publishedRates(), InMemoryPixelforgeClient::refusal('http_502'));
+    pixelforge()->answerRates(InMemoryPixelforgeClient::publishedRates(), InMemoryPixelforgeClient::refusal('http_502'));
     $user = User::factory()->create();
 
     $this->actingAs($user)->get(route('dashboard'))->assertOk();
@@ -83,7 +83,7 @@ it('prices with the last rates Pixelforge quoted while it can\'t quote them', fu
 
 it('never caches rates it can\'t read, so the next page asks again', function () {
     Exceptions::fake();
-    pixelforge()->quotes(NoAnswer::Unreadable);
+    pixelforge()->answerRates(NoAnswer::Unreadable);
     $user = User::factory()->create();
 
     $this->actingAs($user)
@@ -98,7 +98,7 @@ it('never caches rates it can\'t read, so the next page asks again', function ()
 it('submits nothing and says why when there are no rates to price a Generation with', function () {
     Exceptions::fake();
     Queue::fake();
-    pixelforge()->quotes(NoAnswer::Unreachable);
+    pixelforge()->answerRates(NoAnswer::Unreachable);
     $user = User::factory()->create();
 
     $this->actingAs($user)

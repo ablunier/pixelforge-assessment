@@ -41,7 +41,7 @@ final class InMemoryPixelforgeClient implements PixelforgeClient
     private array $retrieveAnswers = [];
 
     /** @var list<Rates|PixelforgeError|NoAnswer> */
-    private array $quotes = [];
+    private array $rateAnswers = [];
 
     /** @var list<CreateRequest> */
     private array $createRequests = [];
@@ -49,7 +49,7 @@ final class InMemoryPixelforgeClient implements PixelforgeClient
     /** @var list<string> Pixelforge ids */
     private array $retrieved = [];
 
-    private int $ratesQuoted = 0;
+    private int $rateRequests = 0;
 
     /**
      * The rates Pixelforge's docs publish: $5.00, $10.00, $40.00 and $12.50 per
@@ -109,7 +109,7 @@ final class InMemoryPixelforgeClient implements PixelforgeClient
      *
      * @param  Answer  ...$answers
      */
-    public function reports(Generation $generation, Reported|PixelforgeError|NoAnswer|Closure ...$answers): void
+    public function answerRetrieves(Generation $generation, Reported|PixelforgeError|NoAnswer|Closure ...$answers): void
     {
         $pixelforgeId = $generation->pixelforge_id ?? $this->idempotencyKeys[$generation->id] ?? self::pixelforgeIdFor($generation->id);
 
@@ -121,11 +121,11 @@ final class InMemoryPixelforgeClient implements PixelforgeClient
 
     /**
      * What the next requests for rates get, in order. After these, Pixelforge
-     * quotes its published rates.
+     * answers with its published rates.
      */
-    public function quotes(Rates|PixelforgeError|NoAnswer ...$answers): void
+    public function answerRates(Rates|PixelforgeError|NoAnswer ...$answers): void
     {
-        array_push($this->quotes, ...$answers);
+        array_push($this->rateAnswers, ...$answers);
     }
 
     /**
@@ -148,9 +148,9 @@ final class InMemoryPixelforgeClient implements PixelforgeClient
         return count($this->retrieved);
     }
 
-    public function ratesQuoted(): int
+    public function rateRequests(): int
     {
-        return $this->ratesQuoted;
+        return $this->rateRequests;
     }
 
     /**
@@ -163,8 +163,8 @@ final class InMemoryPixelforgeClient implements PixelforgeClient
 
     public function rates(): Rates
     {
-        $this->ratesQuoted++;
-        $answer = array_shift($this->quotes) ?? self::publishedRates();
+        $this->rateRequests++;
+        $answer = array_shift($this->rateAnswers) ?? self::publishedRates();
 
         if ($answer instanceof Rates) {
             return $answer;

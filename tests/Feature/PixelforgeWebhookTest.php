@@ -318,7 +318,7 @@ it('matches a webhook that arrives before the create response by the local id in
 
 it('treats a webhook as a no-op once polling has already found the Generation succeeded', function () {
     $generation = Generation::factory()->accepted(GenerationStatus::Processing)->create(['pixelforge_id' => 'gen_01JC2Z8Q4N6V0M3H7X5T9R2B1K']);
-    pixelforge()->reports($generation, Reported::succeeded());
+    pixelforge()->answerRetrieves($generation, Reported::succeeded());
 
     $this->travel(61)->seconds();
     $this->artisan('generations:reconcile')->assertSuccessful();
