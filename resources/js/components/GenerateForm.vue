@@ -5,6 +5,7 @@ import { computed } from 'vue';
 import GenerationController from '@/actions/App/Http/Controllers/GenerationController';
 import InputError from '@/components/InputError.vue';
 import Price from '@/components/Price.vue';
+import TextLink from '@/components/TextLink.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,13 +16,17 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { formatForDisplay } from '@/lib/money';
 import { priceRange, promptLength } from '@/lib/pricing';
+import { show as buyCredits } from '@/routes/credits';
 import type { GenerateFormOptions, PricingData, Quality, Size } from '@/types';
 
 const props = defineProps<{
     /** Null while Pixelforge's rates can't be had. */
     pricing: PricingData | null;
     options: GenerateFormOptions;
+    /** The user's Available Balance in integer nanodollars. */
+    availableBalance: number;
 }>();
 
 const sizeLabels: Record<Size, string> = {
@@ -62,6 +67,22 @@ const range = computed(() =>
               props.pricing,
           ),
 );
+
+/**
+ * Why the Available Balance can't cover the live Maximum Price, or undefined
+ * when it can. The server checks again on submit, under `generate`.
+ */
+const insufficientCredits = computed((): string | undefined => {
+    if (range.value === null) {
+        return undefined;
+    }
+
+    const available = BigInt(props.availableBalance);
+
+    return available < range.value.max
+        ? `Not enough credits: $${formatForDisplay(available)} available, up to $${formatForDisplay(range.value.max)} needed.`
+        : undefined;
+});
 
 function isHttpUrl(value: string): boolean {
     try {
@@ -313,10 +334,15 @@ function submit(): void {
             </div>
 
             <div class="flex flex-col items-start gap-1 sm:items-end">
+                <p class="text-sm text-muted-foreground">
+                    Available Balance
+                    <Price :nanodollars="availableBalance" />
+                </p>
                 <Button
                     type="submit"
                     :disabled="
                         range === null ||
+                        insufficientCredits !== undefined ||
                         hasClientErrors ||
                         form.validating ||
                         form.processing
@@ -324,7 +350,18 @@ function submit(): void {
                 >
                     Generate
                 </Button>
-                <InputError :message="errorFor('generate')" />
+                <div aria-live="polite" class="grid gap-1 sm:justify-items-end">
+                    <InputError
+                        :message="errorFor('generate', insufficientCredits)"
+                    />
+                    <TextLink
+                        v-if="insufficientCredits !== undefined"
+                        :href="buyCredits()"
+                        class="text-sm"
+                    >
+                        Buy credits
+                    </TextLink>
+                </div>
             </div>
         </div>
     </form>

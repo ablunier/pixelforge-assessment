@@ -31,6 +31,8 @@ const props = defineProps<{
     options: GenerateFormOptions;
     /** The user's Generations, newest first. */
     generations: Generation[];
+    /** The user's Available Balance in integer nanodollars. */
+    availableBalance: number;
     /** Whether any of the user's Generations isn't final, so the history should poll. */
     pollHistory: boolean;
 }>();
@@ -72,7 +74,11 @@ if (
                 title="Generate an image"
                 description="Describe the image you want. You pay Pixelforge's cost plus 25%, and nothing if it fails."
             />
-            <GenerateForm :pricing="pricing" :options="options" />
+            <GenerateForm
+                :pricing="pricing"
+                :options="options"
+                :available-balance="availableBalance"
+            />
         </section>
 
         <section

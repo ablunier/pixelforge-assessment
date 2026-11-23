@@ -5,8 +5,10 @@ import CreditsController from '@/actions/App/Http/Controllers/CreditsController'
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
 import Price from '@/components/Price.vue';
+import TextLink from '@/components/TextLink.vue';
 import { Button } from '@/components/ui/button';
 import { formatForDisplay } from '@/lib/money';
+import { dashboard } from '@/routes';
 import { show } from '@/routes/credits';
 import type { CreditPack, LedgerEntry, LedgerEntryKind } from '@/types';
 
@@ -37,12 +39,18 @@ function buy(pack: CreditPack): void {
     form.submit({ preserveScroll: true });
 }
 
+/** Each kind in plain language, with what it did to the user's Credits. */
 const kindLabels: Record<LedgerEntryKind, string> = {
-    top_up: 'Top-up',
-    hold: 'Hold',
-    hold_release: 'Hold release',
-    charge: 'Charge',
+    top_up: 'Top-up: Credits added',
+    hold: 'Hold: set aside while a Generation runs',
+    hold_release: 'Hold release: set-aside Credits returned',
+    charge: 'Charge: the Price of a succeeded Generation',
 };
+
+/** Where a ledger entry's Generation shows in the history on the main page. */
+function generationHref(generationId: string): string {
+    return `${dashboard().url}#generation-${generationId}`;
+}
 
 /** Whether the entry adds to (+) or takes from (−) what the user can spend. */
 function sign(kind: LedgerEntryKind): string {
@@ -105,10 +113,17 @@ function formatDate(iso: string): string {
                     :key="entry.id"
                     class="flex items-center justify-between gap-4 py-3 text-sm"
                 >
-                    <div class="flex flex-col">
+                    <div class="flex min-w-0 flex-col">
                         <span class="font-medium">{{
                             kindLabels[entry.kind]
                         }}</span>
+                        <TextLink
+                            v-if="entry.generation !== null"
+                            :href="generationHref(entry.generation.id)"
+                            class="truncate"
+                            :title="entry.generation.prompt"
+                            >{{ entry.generation.prompt }}</TextLink
+                        >
                         <time
                             :datetime="entry.createdAt"
                             class="text-muted-foreground"
