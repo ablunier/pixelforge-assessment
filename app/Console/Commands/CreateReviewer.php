@@ -3,10 +3,12 @@
 namespace App\Console\Commands;
 
 use App\Actions\CreateGeneration;
+use App\Actions\TopUp;
 use App\Enums\Quality;
 use App\Enums\Size;
 use App\Generations\GenerationParameters;
 use App\Models\User;
+use App\Money\Money;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -16,6 +18,11 @@ use Illuminate\Support\Str;
  * Sets up the reviewers' account from config('reviewer'). The password is
  * never committed: it comes from REVIEWER_PASSWORD, or is generated and
  * printed once when the account is first created.
+ *
+ * The reviewer is an admin, so they can see the admin report, and is topped
+ * up to a Balance of CREDITS: enough for the examples plus one Generation of
+ * every quality and size. A reviewer whose Balance already reaches CREDITS
+ * gets no Top-up, so running this again adds nothing until they've spent some.
  *
  * With --examples it also presses Generate once per Pixelforge sandbox
  * keyword, through the real pipeline, so the reviewer's history holds real
@@ -39,9 +46,13 @@ class CreateReviewer extends Command
         '[overloaded]' => 'A mountain cabin in deep snow, woodcut [overloaded]',
     ];
 
-    public function handle(CreateGeneration $createGeneration): int
+    /** The Balance the reviewer is topped up to, in dollars. */
+    public const string CREDITS = '10';
+
+    public function handle(CreateGeneration $createGeneration, TopUp $topUp): int
     {
         $reviewer = $this->createOrUpdateReviewer();
+        $this->topUpToCredits($reviewer, $topUp);
 
         if ($this->option('examples')) {
             $this->submitMissingExamples($reviewer, $createGeneration);
@@ -58,6 +69,7 @@ class CreateReviewer extends Command
 
         $reviewer = User::query()->firstOrNew(['email' => $email]);
         $reviewer->name = (string) config('reviewer.name');
+        $reviewer->is_admin = true;
 
         if (is_string($configuredPassword) && $configuredPassword !== '') {
             $reviewer->password = $configuredPassword;
@@ -75,6 +87,20 @@ class CreateReviewer extends Command
         }
 
         return $reviewer;
+    }
+
+    /**
+     * Top the reviewer up by whatever their Balance lacks of CREDITS.
+     */
+    private function topUpToCredits(User $reviewer, TopUp $topUp): void
+    {
+        $shortfall = Money::fromDecimal(self::CREDITS)->minus($reviewer->balance());
+
+        if ($shortfall->isGreaterThan(Money::ofNanodollars(0))) {
+            $topUp->handle($reviewer, $shortfall);
+        }
+
+        $this->components->twoColumnDetail('Balance', '$'.$reviewer->balance()->formatForDisplay());
     }
 
     /**

@@ -3,7 +3,6 @@
 namespace Database\Seeders;
 
 use App\Actions\GenerationLifecycle;
-use App\Actions\TopUp;
 use App\Console\Commands\CreateReviewer;
 use App\Enums\GenerationStatus;
 use App\Enums\Quality;
@@ -12,7 +11,6 @@ use App\Generations\GenerationParameters;
 use App\Models\Generation;
 use App\Models\User;
 use App\Models\WebhookEvent;
-use App\Money\Money;
 use App\Pixelforge\Answer;
 use App\Pixelforge\GenerationErrorCode;
 use App\Pixelforge\GenerationSnapshot;
@@ -29,11 +27,12 @@ use Illuminate\Support\Str;
  * These Generations are made up (their `gen_` ids exist nowhere), so they're
  * never seeded in production, where every Generation must match Pixelforge's
  * own records: there, `php artisan reviewer:create --examples` submits real
- * ones instead. The reviewer is topped up to cover the examples' Holds, and
- * each example is created `pending` and then finished through
- * GenerationLifecycle with a made-up Pixelforge snapshot, so its status and
- * money (Hold, Charge, Hold release) follow the real rules. The snapshots carry no image URL, so no image
- * download is queued and the history shows the "image expired" placeholder.
+ * ones instead. `reviewer:create` makes the reviewer an admin and gives them
+ * the Credits to Hold the examples. Each example is created `pending` and
+ * then finished through GenerationLifecycle with a made-up Pixelforge
+ * snapshot, so its status and money (Hold, Charge, Hold release) follow the
+ * real rules. The snapshots carry no image URL, so no image download is
+ * queued and the history shows the "image expired" placeholder.
  */
 class ReviewerSeeder extends Seeder
 {
@@ -45,7 +44,7 @@ class ReviewerSeeder extends Seeder
         'reasoning_tokens' => '12.50',
     ];
 
-    public function run(GenerationLifecycle $lifecycle, TopUp $topUp): void
+    public function run(GenerationLifecycle $lifecycle): void
     {
         $this->command->call('reviewer:create');
 
@@ -69,8 +68,6 @@ class ReviewerSeeder extends Seeder
             'blocked' => new GenerationParameters($prompts['[blocked]'], Size::Square, Quality::Low, []),
         ];
 
-        $this->topUpToCover($topUp, $reviewer, $examples);
-
         // The Pixelforge docs' example usage.
         $succeeded = $this->pending($lifecycle, $reviewer, $examples['succeed']);
         $lifecycle->apply($succeeded, $this->snapshot($succeeded, GenerationStatus::Succeeded, usage: new Usage(12, 765, 6_450, 3_184)));
@@ -88,28 +85,6 @@ class ReviewerSeeder extends Seeder
 
         $blocked = $this->pending($lifecycle, $reviewer, $examples['blocked']);
         $lifecycle->recordSubmissionAttempt($blocked, Answer::refused(Refusal::Permanent, GenerationErrorCode::ContentPolicyViolation->value, 'This prompt was rejected by our content policy.'));
-    }
-
-    /**
-     * Top the reviewer up by whatever their Available Balance lacks to Hold
-     * every example's Maximum Price, so each takes the same Hold-then-Charge
-     * path as a real Generation.
-     *
-     * @param  array<string, GenerationParameters>  $examples
-     */
-    private function topUpToCover(TopUp $topUp, User $reviewer, array $examples): void
-    {
-        $needed = array_reduce(
-            $examples,
-            fn (Money $total, GenerationParameters $parameters): Money => $total->plus($parameters->maximumPrice(Rates::fromPixelforge(self::RATES))),
-            Money::ofNanodollars(0),
-        );
-
-        $shortfall = $needed->minus($reviewer->availableBalance());
-
-        if ($shortfall->isGreaterThan(Money::ofNanodollars(0))) {
-            $topUp->handle($reviewer, $shortfall);
-        }
     }
 
     /**
