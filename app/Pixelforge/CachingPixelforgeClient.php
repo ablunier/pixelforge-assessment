@@ -87,4 +87,9 @@ final readonly class CachingPixelforgeClient implements PixelforgeClient
     {
         return $this->pixelforge->retrieveGeneration($pixelforgeId);
     }
+
+    public function downloadImage(string $url): string
+    {
+        return $this->pixelforge->downloadImage($url);
+    }
 }

@@ -7,7 +7,6 @@ use App\Models\Generation;
 use App\Pixelforge\PixelforgeClient;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
-use Illuminate\Http\Client\Factory as Http;
 use Illuminate\Support\Facades\Storage;
 use UnexpectedValueException;
 
@@ -24,9 +23,6 @@ class StoreGenerationImage implements ShouldQueue
     public const string DISK = 'generation-images';
 
     public int $tries = 5;
-
-    /** The longest a single download may take. */
-    public const int DOWNLOAD_TIMEOUT_SECONDS = 30;
 
     /** The largest image accepted: a 1536×1024 PNG is a few megabytes at most. */
     public const int MAX_IMAGE_BYTES = 20 * 1024 * 1024;
@@ -45,7 +41,7 @@ class StoreGenerationImage implements ShouldQueue
         return [10, 30, 120, 600];
     }
 
-    public function handle(PixelforgeClient $pixelforge, Http $http): void
+    public function handle(PixelforgeClient $pixelforge): void
     {
         $generation = $this->generation->fresh();
 
@@ -66,7 +62,7 @@ class StoreGenerationImage implements ShouldQueue
             return;
         }
 
-        $png = $http->timeout(self::DOWNLOAD_TIMEOUT_SECONDS)->get((string) $generation->provider_image_url)->throw()->body();
+        $png = $pixelforge->downloadImage((string) $generation->provider_image_url);
 
         if (strlen($png) > self::MAX_IMAGE_BYTES || ! str_starts_with($png, self::PNG_SIGNATURE)) {
             throw new UnexpectedValueException("The image for Generation {$generation->id} isn't a PNG of at most ".self::MAX_IMAGE_BYTES.' bytes.');

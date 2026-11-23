@@ -140,6 +140,17 @@ it('reads the current rates from GET /v1/pricing', function () {
     expect($rates)->toEqual(Rates::fromPixelforge(['input_text_tokens' => '5.00', 'input_image_tokens' => '10.00', 'output_tokens' => '40.00', 'reasoning_tokens' => '12.50']));
 });
 
+it('downloads an image from its signed URL as is, without the API key', function () {
+    Http::fake(['images.pixelforge.test/lighthouse.png*' => Http::response("\x89PNG\r\n\x1a\nlighthouse", 200, ['Content-Type' => 'image/png'])]);
+
+    $png = httpPixelforge()->downloadImage('https://images.pixelforge.test/lighthouse.png?expires=1762351409&signature=abc');
+
+    Http::assertSent(fn (Request $request) => $request->method() === 'GET'
+        && $request->url() === 'https://images.pixelforge.test/lighthouse.png?expires=1762351409&signature=abc'
+        && ! $request->hasHeader('Authorization'));
+    expect($png)->toBe("\x89PNG\r\n\x1a\nlighthouse");
+});
+
 it('turns an error body into a PixelforgeError with its code, message, status and Retry-After', function () {
     Http::fake(['pixelforge.test/v1/generations' => Http::response(
         ['error' => ['type' => 'api_error', 'code' => 'overloaded', 'message' => 'Pixelforge is temporarily overloaded.']],
@@ -167,6 +178,7 @@ it('names an error without a body by its HTTP status', function (Closure $call) 
     'create' => [fn (HttpPixelforgeClient $pixelforge) => createLighthouse($pixelforge)],
     'retrieve' => [fn (HttpPixelforgeClient $pixelforge) => $pixelforge->retrieveGeneration('gen_01JC2Z8Q4N6V0M3H7X5T9R2B1K')],
     'rates' => [fn (HttpPixelforgeClient $pixelforge) => $pixelforge->rates()],
+    'image download' => [fn (HttpPixelforgeClient $pixelforge) => $pixelforge->downloadImage('https://pixelforge.test/images/lighthouse.png')],
 ]);
 
 it('throws PixelforgeUnreachable when no response comes back', function (Closure $call) {
@@ -177,6 +189,7 @@ it('throws PixelforgeUnreachable when no response comes back', function (Closure
     'create' => [fn (HttpPixelforgeClient $pixelforge) => createLighthouse($pixelforge)],
     'retrieve' => [fn (HttpPixelforgeClient $pixelforge) => $pixelforge->retrieveGeneration('gen_01JC2Z8Q4N6V0M3H7X5T9R2B1K')],
     'rates' => [fn (HttpPixelforgeClient $pixelforge) => $pixelforge->rates()],
+    'image download' => [fn (HttpPixelforgeClient $pixelforge) => $pixelforge->downloadImage('https://pixelforge.test/images/lighthouse.png')],
 ]);
 
 it('throws UnexpectedPixelforgeResponse for a success body it can\'t read', function (string $url, array $body, Closure $call) {

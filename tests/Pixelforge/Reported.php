@@ -14,7 +14,7 @@ use Carbon\CarbonImmutable;
  */
 final readonly class Reported
 {
-    /** The docs' signed image URL, which the base test case serves as a PNG. */
+    /** The docs' signed image URL. */
     public const string IMAGE_URL = 'https://pixelforge.promptedit.dev/images/gen_01JC2Z8Q4N6V0M3H7X5T9R2B1K.png?expires=1762351409&signature=abc';
 
     public const string IMAGE_URL_EXPIRES_AT = '2026-11-05T14:03:29Z';

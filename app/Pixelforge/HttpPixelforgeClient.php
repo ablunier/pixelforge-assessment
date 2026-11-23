@@ -58,6 +58,22 @@ final readonly class HttpPixelforgeClient implements PixelforgeClient
         ));
     }
 
+    public function downloadImage(string $url): string
+    {
+        // The signed URL is its own credential: the API key stays with the API.
+        try {
+            $response = $this->http->timeout(self::IMAGE_DOWNLOAD_TIMEOUT_SECONDS)->get($url);
+        } catch (ConnectionException $exception) {
+            throw PixelforgeUnreachable::because($exception);
+        }
+
+        if ($response->failed()) {
+            throw PixelforgeError::fromResponse($response);
+        }
+
+        return $response->body();
+    }
+
     private function generation(Response $response): GenerationSnapshot
     {
         if ($response->failed()) {

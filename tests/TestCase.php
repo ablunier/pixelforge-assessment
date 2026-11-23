@@ -26,12 +26,8 @@ abstract class TestCase extends BaseTestCase
         $this->app->instance(PixelforgeClient::class, new CachingPixelforgeClient($this->pixelforge, $this->app->make(Cache::class)));
         Http::preventStrayRequests();
 
-        // A succeeded Generation's image is downloaded to this disk. Tests that
-        // need the download to behave differently use another image URL.
+        // A succeeded Generation's image is downloaded to this disk.
         Storage::fake(StoreGenerationImage::DISK);
-        Http::fake([
-            'pixelforge.promptedit.dev/images/*' => Http::response("\x89PNG\r\n\x1a\n", 200, ['Content-Type' => 'image/png']),
-        ]);
     }
 
     /**

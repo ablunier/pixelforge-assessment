@@ -43,6 +43,9 @@ final class InMemoryPixelforgeClient implements PixelforgeClient
     /** @var list<Rates|PixelforgeError|NoAnswer> */
     private array $rateAnswers = [];
 
+    /** @var list<string|PixelforgeError|NoAnswer> */
+    private array $downloadAnswers = [];
+
     /** @var list<CreateRequest> */
     private array $createRequests = [];
 
@@ -50,6 +53,12 @@ final class InMemoryPixelforgeClient implements PixelforgeClient
     private array $retrieved = [];
 
     private int $rateRequests = 0;
+
+    /** @var list<string> image URLs */
+    private array $downloads = [];
+
+    /** The image Pixelforge's image host serves unless told otherwise: a PNG signature and nothing else. */
+    public const string PNG = "\x89PNG\r\n\x1a\n";
 
     /**
      * The rates Pixelforge's docs publish: $5.00, $10.00, $40.00 and $12.50 per
@@ -129,6 +138,16 @@ final class InMemoryPixelforgeClient implements PixelforgeClient
     }
 
     /**
+     * What the next image downloads get, in order: the bytes served, a Refusal
+     * (an error status from the image host) or no answer. After these, the
+     * image host serves PNG at any URL.
+     */
+    public function answerDownloads(string|PixelforgeError|NoAnswer ...$answers): void
+    {
+        array_push($this->downloadAnswers, ...$answers);
+    }
+
+    /**
      * @return list<CreateRequest>
      */
     public function createRequests(): array
@@ -146,6 +165,16 @@ final class InMemoryPixelforgeClient implements PixelforgeClient
     public function retrieves(): int
     {
         return count($this->retrieved);
+    }
+
+    /**
+     * The image URLs downloaded, in order.
+     *
+     * @return list<string>
+     */
+    public function downloads(): array
+    {
+        return $this->downloads;
     }
 
     public function rateRequests(): int
@@ -209,6 +238,14 @@ final class InMemoryPixelforgeClient implements PixelforgeClient
         }
 
         return $answer instanceof NoAnswer ? throw self::failure($answer) : $this->generations[$pixelforgeId];
+    }
+
+    public function downloadImage(string $url): string
+    {
+        $this->downloads[] = $url;
+        $answer = array_shift($this->downloadAnswers) ?? self::PNG;
+
+        return is_string($answer) ? $answer : throw self::failure($answer);
     }
 
     /**

@@ -7,11 +7,14 @@ use App\Enums\Size;
 use App\Pricing\Rates;
 
 /**
- * The app's boundary with the Pixelforge HTTP API. Pixelforge payloads and
+ * The app's boundary with Pixelforge: its HTTP API and its image host. Pixelforge payloads and
  * error codes stay behind this interface.
  */
 interface PixelforgeClient
 {
+    /** The longest an image download may take before it gives up. */
+    public const int IMAGE_DOWNLOAD_TIMEOUT_SECONDS = 30;
+
     /**
      * The current rates from GET /v1/pricing.
      *
@@ -43,4 +46,13 @@ interface PixelforgeClient
      * @throws UnexpectedPixelforgeResponse when a success response isn't a usable Generation
      */
     public function retrieveGeneration(string $pixelforgeId): GenerationSnapshot;
+
+    /**
+     * The bytes behind a Generation's signed image URL, as Pixelforge's image
+     * host serves them. Taking at most IMAGE_DOWNLOAD_TIMEOUT_SECONDS.
+     *
+     * @throws PixelforgeError when the image host answers with an error status
+     * @throws PixelforgeUnreachable when the image host can't be reached
+     */
+    public function downloadImage(string $url): string;
 }
