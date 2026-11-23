@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\CreditsController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\GenerationController;
 use App\Http\Controllers\GenerationImageController;
@@ -20,6 +21,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('generations.image');
     Route::get('generations/{generation}/image/download', [GenerationImageController::class, 'download'])
         ->name('generations.image.download');
+    Route::get('credits', [CreditsController::class, 'show'])->name('credits.show');
+    Route::post('credits', [CreditsController::class, 'store'])->name('credits.store');
 });
 
 require __DIR__.'/settings.php';
