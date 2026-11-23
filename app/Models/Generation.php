@@ -6,6 +6,7 @@ use App\Casts\AsMoney;
 use App\Enums\GenerationStatus;
 use App\Enums\Quality;
 use App\Enums\Size;
+use App\Generations\GenerationParameters;
 use App\Money\Money;
 use App\Pricing\Rates;
 use Carbon\CarbonImmutable;
@@ -125,6 +126,14 @@ class Generation extends Model
             GenerationStatus::cases(),
             fn (GenerationStatus $status): bool => ! $status->isFinal(),
         ));
+    }
+
+    /**
+     * What the user chose for this Generation, as Try again reuses them.
+     */
+    public function parameters(): GenerationParameters
+    {
+        return new GenerationParameters($this->prompt, $this->size, $this->quality, $this->reference_images);
     }
 
     /**

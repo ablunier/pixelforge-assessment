@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Actions\CreateGeneration;
 use App\Enums\Quality;
 use App\Enums\Size;
+use App\Generations\GenerationParameters;
 use App\Models\User;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
@@ -89,7 +90,7 @@ class CreateReviewer extends Command
                 continue;
             }
 
-            $createGeneration->handle($reviewer, $prompt, Size::Square, Quality::Low, []);
+            $createGeneration->handle($reviewer, new GenerationParameters($prompt, Size::Square, Quality::Low, []));
             $this->components->twoColumnDetail($keyword, 'submitted');
         }
     }
