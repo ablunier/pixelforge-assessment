@@ -1,13 +1,18 @@
 <?php
 
-use App\Credits\InsufficientAvailableBalance;
 use App\Enums\GenerationStatus;
+use App\Enums\Quality;
+use App\Enums\Size;
+use App\Generations\GenerationParameters;
+use App\Http\Requests\StoreGenerationRequest;
 use App\Jobs\SubmitGenerationToPixelforge;
 use App\Models\Generation;
 use App\Models\User;
+use App\Money\Money;
 use App\Pixelforge\PricingUnavailable;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Queue;
+use Tests\Pixelforge\InMemoryPixelforgeClient;
 use Tests\Pixelforge\NoAnswer;
 
 /**
@@ -78,18 +83,66 @@ it('changes the password when run again with a new one configured', function () 
     $this->assertAuthenticated();
 });
 
-/**
- * The reviewer account already set up, with Credits to Hold every example.
- */
-function fundedReviewer(): User
+function reviewer(): User
 {
-    return User::factory()->withTopUp()->create(['email' => 'reviewer@example.com']);
+    return User::query()->where('email', 'reviewer@example.com')->sole();
 }
 
-it('submits one Generation per sandbox keyword to Pixelforge with --examples', function () {
+it('makes the reviewer an admin, so they can see the admin report', function () {
+    config(['reviewer.email' => 'reviewer@example.com', 'reviewer.password' => 'a-long-secret-password']);
+
+    createReviewer();
+
+    $this->actingAs(reviewer())->get(route('admin.report'))->assertOk();
+});
+
+it('leaves the reviewer enough Credits after the examples to try every quality and size', function () {
     config(['reviewer.email' => 'reviewer@example.com', 'reviewer.password' => 'a-long-secret-password']);
     Queue::fake();
-    fundedReviewer();
+
+    createReviewer(['--examples' => true]);
+
+    // One Generation of each quality and size, with the longest prompt and the most reference images.
+    $everyQualityAndSize = Money::ofNanodollars(0);
+    foreach (Quality::cases() as $quality) {
+        foreach (Size::cases() as $size) {
+            $parameters = new GenerationParameters(
+                str_repeat('a', StoreGenerationRequest::MAX_PROMPT_LENGTH),
+                $size,
+                $quality,
+                array_fill(0, StoreGenerationRequest::MAX_REFERENCE_IMAGES, 'https://example.com/style.png'),
+            );
+            $everyQualityAndSize = $everyQualityAndSize->plus($parameters->maximumPrice(InMemoryPixelforgeClient::publishedRates()));
+        }
+    }
+
+    expect(reviewer()->availableBalance()->isLessThan($everyQualityAndSize))->toBeFalse();
+});
+
+it('tops the reviewer up only once when run again', function () {
+    config(['reviewer.email' => 'reviewer@example.com', 'reviewer.password' => 'a-long-secret-password']);
+    Queue::fake();
+    createReviewer(['--examples' => true]);
+    $balance = reviewer()->balance();
+
+    createReviewer();
+    createReviewer(['--examples' => true]);
+
+    expect(reviewer()->balance()->nanodollars())->toBe($balance->nanodollars());
+});
+
+it('adds no Credits to a reviewer who already has plenty', function () {
+    config(['reviewer.email' => 'reviewer@example.com', 'reviewer.password' => 'a-long-secret-password']);
+    User::factory()->withTopUp(Money::fromDecimal('100'))->create(['email' => 'reviewer@example.com']);
+
+    createReviewer();
+
+    expect(reviewer()->balance()->nanodollars())->toBe(Money::fromDecimal('100')->nanodollars());
+});
+
+it('funds a new reviewer and submits one Generation per sandbox keyword to Pixelforge with --examples', function () {
+    config(['reviewer.email' => 'reviewer@example.com', 'reviewer.password' => 'a-long-secret-password']);
+    Queue::fake();
 
     createReviewer(['--examples' => true]);
 
@@ -107,7 +160,6 @@ it('submits one Generation per sandbox keyword to Pixelforge with --examples', f
 it('only submits the examples the reviewer is missing when run again', function () {
     config(['reviewer.email' => 'reviewer@example.com', 'reviewer.password' => 'a-long-secret-password']);
     Queue::fake();
-    fundedReviewer();
     createReviewer(['--examples' => true]);
     Generation::query()->where('prompt', 'like', '%[slow]%')->delete();
 
@@ -124,16 +176,6 @@ it('stops with the pricing failure, submitting nothing, when there are no rates 
     Queue::fake();
 
     expect(fn () => Artisan::call('reviewer:create', ['--examples' => true]))->toThrow(PricingUnavailable::class);
-
-    expect(Generation::query()->count())->toBe(0);
-    Queue::assertNothingPushed();
-});
-
-it('stops, submitting no example it can\'t Hold, when the reviewer lacks the Credits', function () {
-    config(['reviewer.email' => 'reviewer@example.com', 'reviewer.password' => 'a-long-secret-password']);
-    Queue::fake();
-
-    expect(fn () => Artisan::call('reviewer:create', ['--examples' => true]))->toThrow(InsufficientAvailableBalance::class);
 
     expect(Generation::query()->count())->toBe(0);
     Queue::assertNothingPushed();

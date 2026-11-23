@@ -27,6 +27,8 @@ PixelForge is a web app that resells [Pixelforge](https://pixelforge.promptedit.
 - **Waits its turn**: rate limits, the concurrency limit and overloads are retried in the background, so several quick submissions just work.
 - **Try again**: one click on a failed Generation creates a new one with the same parameters.
 - **Images that last**: each image is downloaded and kept after Pixelforge's 24-hour URL expires.
+- **Credits**: every account starts with $1.00 and can buy $5, $10 or $25 packs (no real payment). A Generation the Available Balance can't cover is blocked, with a link to buy more.
+- **Admin report**: daily and per-user Charges, Provider Cost and Profit, with each day's Provider Cost checked against what Pixelforge billed.
 
 ## Run locally
 
@@ -50,7 +52,7 @@ To talk to Pixelforge, create a **separate key for local development** in the Pi
 ./vendor/bin/sail artisan db:seed
 ```
 
-It prints the reviewer's generated password (or uses `REVIEWER_PASSWORD` from `.env`) and seeds four finished Generations: a success, a `[duplicate]` success whose Webhook Events were applied once, a failure and a content-policy rejection. They're made up locally, so their thumbnails show the "image expired" placeholder.
+It prints the reviewer's generated password (or uses `REVIEWER_PASSWORD` from `.env`), makes the reviewer an admin with a $10.00 Balance, and seeds four finished Generations: a success, a `[duplicate]` success whose Webhook Events were applied once, a failure and a content-policy rejection. They're made up locally, so their thumbnails show the "image expired" placeholder.
 
 ### Receive webhooks through a tunnel
 
@@ -105,6 +107,7 @@ A Laravel 13 + Inertia + Vue 3 (TypeScript) app on Postgres, with a database que
 | Generate, lifecycle, webhooks | [`app/Actions`](app/Actions)                                                                                                                           |
 | Submit and image jobs         | [`app/Jobs`](app/Jobs)                                                                                                                                 |
 | Reconciliation, reviewer      | [`app/Console/Commands`](app/Console/Commands)                                                                                                         |
+| Admin report                  | [`app/Reports`](app/Reports), [`app/Actions/CompileAdminReport.php`](app/Actions/CompileAdminReport.php)                                               |
 | Webhook endpoint              | [`routes/webhooks.php`](routes/webhooks.php), [`app/Http/Middleware/VerifyPixelforgeSignature.php`](app/Http/Middleware/VerifyPixelforgeSignature.php) |
 | Generate page and history     | [`resources/js/pages/Dashboard.vue`](resources/js/pages/Dashboard.vue), [`resources/js/components`](resources/js/components)                           |
 
@@ -116,6 +119,24 @@ A Laravel 13 + Inertia + Vue 3 (TypeScript) app on Postgres, with a database que
 - **Maximum Price.** It's computed on the server from the most text and reasoning tokens Pixelforge can bill. If Pixelforge locks higher rates than the estimate used, the Price is capped at the Maximum Price and the business absorbs the difference; the Provider Cost is still recorded at the locked rates ([ADR-0004](docs/adr/0004-price-capped-at-maximum-price.md)).
 - **Recorded once.** The Price is written only on the single transition into `succeeded`, under the Generation's row lock, so a duplicate webhook, a poll and the create response racing each other can't record it twice.
 - **Failures are free.** A failed or rejected Generation has no Provider Cost and no Price.
+
+### Balances, Holds and Charges
+
+Credits live in an append-only ledger of Top-ups, Holds, Hold releases and Charges ([ADR-0002](docs/adr/0002-hold-then-charge-ledger.md)). No row is ever updated or deleted, and there is no balance column: both figures are sums over the ledger.
+
+- **Balance** = Top-ups − Charges. **Available Balance** = Balance − active Holds, what the user can still commit.
+- **Top-ups.** Registration writes a $1.00 Top-up; Buy credits writes one for the chosen pack, whose amount the server picks from the pack id.
+- **Hold on Generate.** Generate places a Hold for the Maximum Price in the same transaction that saves the `pending` Generation, after locking the user's row and checking the Available Balance. Concurrent submissions can't overspend, and one the Available Balance can't cover is rejected with nothing saved.
+- **Charge on success.** The transition into `succeeded` writes one Charge for the exact Price and a Hold release for the rest of the Hold. The transition into `failed`, whether Pixelforge rejected it at submission or it failed later, releases the whole Hold.
+- **Never twice.** A unique index allows one Charge and one Hold release per Generation, so a duplicate or out-of-order Webhook Event, or a poll racing a webhook, can't record money twice: the database refuses it.
+
+### Admin report
+
+Admins (the reviewer account, or anyone made one with `php artisan user:make-admin <email>`) see a report at `/admin/report` for a date range of up to 92 days, the last 30 by default:
+
+- **Daily totals**: Generations, Charges (user spend), Provider Cost and Profit, counting each succeeded Generation on the UTC day it completed, as Pixelforge bills. Generations from before Balances existed have no Charge and count as zero spend.
+- **Per-user totals** of the same figures.
+- **Reconciliation**: each day's Provider Cost beside the `cost_usd` Pixelforge's `GET /v1/usage` reports for that day, parsed exactly into nanodollars. Any day where they differ is highlighted. If Pixelforge can't be reached, the report still shows the local figures. `/v1/usage` only covers the calling key, so the check is meaningful only in production against the production key.
 
 ## Webhook robustness
 
@@ -136,11 +157,15 @@ The reviewer account is created in production with real Generations, one per san
 docker compose exec -e REVIEWER_EMAIL=<reviewer-email> app php artisan reviewer:create --examples
 ```
 
-[docs/sandbox-verification.md](docs/sandbox-verification.md) is the checklist for verifying `[succeed]`, `[fail]`, `[slow]`, `[duplicate]`, `[blocked]` and `[overloaded]` and the webhook deliveries against the real sandbox.
+The command makes the reviewer an admin and tops their Balance up to $10.00 before submitting the examples, enough to then try every quality and size. Running it again adds Credits only if the Balance has dropped below $10.00.
+
+[docs/sandbox-verification.md](docs/sandbox-verification.md) is the checklist for verifying `[succeed]`, `[fail]`, `[slow]`, `[duplicate]`, `[blocked]` and `[overloaded]`, the webhook deliveries, the money each one moves and the admin report's reconciliation against the real sandbox.
 
 ## Known limitations and next steps
 
-- **No Balances or admin report yet.** Credits, Top-ups, Holds and Charges ([ADR-0002](docs/adr/0002-hold-then-charge-ledger.md)), and the admin report reconciled against `GET /v1/usage`, are the stretch spec in [#2](https://github.com/ablunier/pixelforge-assessment/issues/2). Today a Price is recorded but not deducted from anything.
+- **No real payments.** Buy credits adds Credits without charging anything. There are no refunds or manual ledger adjustments.
+- **Reconciliation only flags.** A day whose Provider Cost differs from `/v1/usage` is highlighted in the report, with no alerting, and the report can't be exported.
+- **One admin role.** `is_admin` is the only role. Admins are made from the command line, not in the app.
 - **Shared provider limits.** Pixelforge's limits (60 requests a minute, 3 concurrent, 500 a day) apply to the whole Pixelforge account, across the local and production keys.
 - **Per-user limits.** Each user may have 5 Generations in progress, 50 in any 24 hours and 10 a minute ([ADR-0006](docs/adr/0006-per-user-generation-limits.md)). Throwaway accounts still multiply these.
 - **History capped at 50.** The history shows a user's 50 newest Generations, with no pagination yet.

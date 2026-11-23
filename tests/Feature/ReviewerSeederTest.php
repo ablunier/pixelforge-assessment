@@ -82,6 +82,15 @@ it('pays for the examples like any Generation: each success charged its Price, e
         ->and($reviewer->balance()->nanodollars())->toBeGreaterThanOrEqual(0);
 });
 
+it('seeds the reviewer as an admin with $10 of Credits, less the examples\' Charges', function () {
+    $this->seed();
+
+    $reviewer = User::query()->where('email', 'reviewer@example.com')->sole();
+    // $10.00 minus the [succeed] and [duplicate] Charges.
+    expect($reviewer->balance()->nanodollars())->toBe(9_599_150_000);
+    $this->actingAs($reviewer)->get(route('admin.report'))->assertOk();
+});
+
 it('fabricates no example Generations in production', function () {
     app()->detectEnvironment(fn (): string => 'production');
 

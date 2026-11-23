@@ -81,7 +81,7 @@ Balance minus all active Holds; what a user can still commit to new Generations.
 _Avoid_: free balance, spendable
 
 **Top-up**:
-Credits added to a Balance, by buying a pack or as the starting grant.
+Credits added to a Balance, by buying a pack, as the starting grant, or when the reviewer account is set up.
 _Avoid_: deposit, purchase, recharge
 
 **Hold**:

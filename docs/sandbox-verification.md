@@ -22,7 +22,8 @@ docker compose exec -e REVIEWER_EMAIL=<reviewer-email> app php artisan reviewer:
 ```
 
 - [ ] It prints `Password: ...` once. Save it in your password manager and send it privately with the submission. Never commit it or paste it into an issue. (Set `REVIEWER_PASSWORD` in `.env` instead if you want to choose it, then recreate the containers.)
-- [ ] It reports `submitted` for each of the six keywords. Running it again submits only missing examples and leaves the password unchanged.
+- [ ] It reports `Balance` as `$10.0000` and `submitted` for each of the six keywords. Running it again submits only missing examples, leaves the password unchanged, and adds no Credits while the Balance is still $10.00 (Holds don't lower the Balance).
+- [ ] Logged in as the reviewer, the navigation links to the admin report and `/admin/report` opens.
 
 The examples are low quality at 1024x1024, about $0.014 each at most. Three of them can be in flight at once (Pixelforge's concurrency limit), so the rest wait their turn for a little while.
 
@@ -59,9 +60,34 @@ dump($reviewer->generations()->oldest()->get()->map(fn ($g) => [
 - [ ] Resend one `generation.succeeded` event from the dashboard. It's answered 200, nothing changes in the history, and the Generation's Price is the same as before.
 - [ ] No delivery shows a `3xx` (a redirect means the webhook URL isn't the final URL) or a `400` (a `400` means the signing secret in `.env` doesn't match the key).
 
-## 5. The numbers match Pixelforge's records
+## 5. The money each Generation moved
 
-A Generation is billed on the UTC day it completed. Compare Pixelforge's usage for the production key with the stored Provider Costs for the same day:
+Wait until every example is final (none `pending`, `queued` or `processing`), then list each Generation's ledger entries and the reviewer's Balances:
+
+```sh
+docker compose exec app php artisan tinker --execute '
+$reviewer = App\Models\User::query()->where("email", "<reviewer-email>")->sole();
+dump($reviewer->generations()->oldest()->get()->map(fn ($g) => [
+    "prompt" => $g->prompt, "status" => $g->status->value, "max_price" => $g->max_price->formatExact(), "price" => $g->price?->formatExact(),
+    "ledger" => $reviewer->ledgerEntries()->where("generation_id", $g->id)->orderBy("id")->get()->map(fn ($e) => $e->kind->value." ".$e->amount->formatExact())->all(),
+])->all());
+dump(["balance" => $reviewer->balance()->formatExact(), "available" => $reviewer->availableBalance()->formatExact()]);'
+```
+
+- [ ] Every Generation has exactly one `hold` equal to its `max_price`.
+- [ ] Each success (`[succeed]`, `[slow]`, `[duplicate]`) has exactly one `charge`, equal to its `price`, and one `hold_release` of `max_price` − `price`. The `[duplicate]` one too, although each of its events arrived twice.
+- [ ] Each failure or rejection (`[fail]`, `[blocked]`, `[overloaded]`, and the "Try again" copy of `[fail]`) has no `charge` and one `hold_release` equal to its whole `max_price`.
+- [ ] `available` equals `balance`, and `balance` is $10.00 minus the sum of the `price`s.
+- [ ] The Buy credits page shows the same history, newest first.
+
+## 6. The numbers match Pixelforge's records
+
+A Generation is billed on the UTC day it completed.
+
+- [ ] Logged in as the reviewer, open the admin report over a range that covers every day with activity. On each such day, the Provider Cost matches Pixelforge's figure to the nanodollar: no day is highlighted, the difference is zero, and no "Couldn't reach Pixelforge" notice shows.
+- [ ] Each day's Generations and Charges agree with the history, and Profit is Charges − Provider Cost.
+
+To cross-check the report by hand, compare Pixelforge's usage for the production key with the stored Provider Costs for the same day:
 
 ```sh
 curl -fsS "https://pixelforge.promptedit.dev/v1/usage?start_date=<yyyy-mm-dd>&end_date=<yyyy-mm-dd>" \
@@ -75,7 +101,7 @@ dump(["generations" => $done->count(), "cost_usd" => $done->reduce(fn ($sum, $g)
 
 - [ ] `generations` and `cost_usd` match the day's `total` from `/v1/usage` exactly. Failed and rejected Generations add nothing to either.
 
-## 6. Leave it in place
+## 7. Leave it in place
 
 - [ ] Don't delete the reviewer's Generations: the reviewers compare them with Pixelforge's records.
-- [ ] Tick the matching criteria on issue #12.
+- [ ] Tick the matching criteria on issue #12, and the production money and reconciliation criteria on issue #18.
