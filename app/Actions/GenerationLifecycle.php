@@ -262,16 +262,15 @@ final class GenerationLifecycle
             return;
         }
 
-        $none = Money::ofNanodollars(0);
-        $price ??= $none;
+        $price ??= Money::zero();
 
-        if ($price->isGreaterThan($none)) {
+        if ($price->isGreaterThan(Money::zero())) {
             $this->writeLedgerEntry($generation, LedgerEntryKind::Charge, $price);
         }
 
         // Nothing is left to release when the Price was capped at the Maximum Price (ADR-0004).
         $remainder = $hold->amount->minus($price);
-        if ($remainder->isGreaterThan($none)) {
+        if ($remainder->isGreaterThan(Money::zero())) {
             $this->writeLedgerEntry($generation, LedgerEntryKind::HoldRelease, $remainder);
         }
     }

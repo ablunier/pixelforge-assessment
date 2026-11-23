@@ -90,7 +90,7 @@ final readonly class Rates implements JsonSerializable
         // A whole number of nanodollars per token needs a rate with at most 3 decimals.
         $perToken = Money::fromDecimal($quote)->dividedExactlyBy(self::TOKENS_PER_QUOTE);
 
-        if ($perToken === null || $perToken->isLessThan(Money::ofNanodollars(0))) {
+        if ($perToken === null || $perToken->isLessThan(Money::zero())) {
             throw new InvalidArgumentException("Pixelforge rate \"{$key}\" ({$quote}) isn't a whole number of nanodollars per token.");
         }
 

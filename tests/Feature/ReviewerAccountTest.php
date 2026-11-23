@@ -103,7 +103,7 @@ it('leaves the reviewer enough Credits after the examples to try every quality a
     createReviewer(['--examples' => true]);
 
     // One Generation of each quality and size, with the longest prompt and the most reference images.
-    $everyQualityAndSize = Money::ofNanodollars(0);
+    $everyQualityAndSize = Money::zero();
     foreach (Quality::cases() as $quality) {
         foreach (Size::cases() as $size) {
             $parameters = new GenerationParameters(

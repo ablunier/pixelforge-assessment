@@ -19,7 +19,7 @@ final readonly class Figures implements JsonSerializable
 
     public static function none(): self
     {
-        return new self(0, Money::ofNanodollars(0), Money::ofNanodollars(0));
+        return new self(0, Money::zero(), Money::zero());
     }
 
     /** Charges minus Provider Costs. */

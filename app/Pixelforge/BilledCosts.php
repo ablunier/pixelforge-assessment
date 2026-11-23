@@ -78,7 +78,7 @@ final readonly class BilledCosts implements JsonSerializable
      */
     public function on(string $date): Money
     {
-        return $this->byDate[$date] ?? Money::ofNanodollars(0);
+        return $this->byDate[$date] ?? Money::zero();
     }
 
     /**

@@ -20,9 +20,10 @@ use Illuminate\Support\Str;
  * printed once when the account is first created.
  *
  * The reviewer is an admin, so they can see the admin report, and is topped
- * up to a Balance of CREDITS: enough for the examples plus one Generation of
- * every quality and size. A reviewer whose Balance already reaches CREDITS
- * gets no Top-up, so running this again adds nothing until they've spent some.
+ * up to a Balance of CREDITS_NANODOLLARS: enough for the examples plus one
+ * Generation of every quality and size. A reviewer whose Balance already
+ * reaches it gets no Top-up, so running this again adds nothing until
+ * they've spent some.
  *
  * With --examples it also presses Generate once per Pixelforge sandbox
  * keyword, through the real pipeline, so the reviewer's history holds real
@@ -46,8 +47,8 @@ class CreateReviewer extends Command
         '[overloaded]' => 'A mountain cabin in deep snow, woodcut [overloaded]',
     ];
 
-    /** The Balance the reviewer is topped up to, in dollars. */
-    public const string CREDITS = '10';
+    /** The Balance the reviewer is topped up to: $10.00. */
+    public const int CREDITS_NANODOLLARS = 10_000_000_000;
 
     public function handle(CreateGeneration $createGeneration, TopUp $topUp): int
     {
@@ -90,13 +91,13 @@ class CreateReviewer extends Command
     }
 
     /**
-     * Top the reviewer up by whatever their Balance lacks of CREDITS.
+     * Top the reviewer up by whatever their Balance lacks of CREDITS_NANODOLLARS.
      */
     private function topUpToCredits(User $reviewer, TopUp $topUp): void
     {
-        $shortfall = Money::fromDecimal(self::CREDITS)->minus($reviewer->balance());
+        $shortfall = Money::ofNanodollars(self::CREDITS_NANODOLLARS)->minus($reviewer->balance());
 
-        if ($shortfall->isGreaterThan(Money::ofNanodollars(0))) {
+        if ($shortfall->isGreaterThan(Money::zero())) {
             $topUp->handle($reviewer, $shortfall);
         }
 
