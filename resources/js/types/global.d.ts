@@ -19,6 +19,8 @@ declare module '@inertiajs/core' {
         sharedPageProps: {
             name: string;
             auth: Auth;
+            /** The signed-in user's Balance in integer nanodollars; null when signed out. */
+            balance: number | null;
             sidebarOpen: boolean;
             [key: string]: unknown;
         };
