@@ -205,6 +205,21 @@ it('totals Charges, Provider Cost and Profit exactly, per day and per user', fun
     }
 });
 
+it('still counts the Generations of a user who deleted their account', function () {
+    $user = User::factory()->withTopUp()->create(['name' => 'Dana', 'email' => 'dana@example.com']);
+    succeededAt($user, '2026-11-03T09:00:00Z', '2026-11-03T09:00:20Z');
+    $user->delete();
+
+    $this->actingAs(admin())
+        ->get(route('admin.report', ['from' => '2026-11-03', 'to' => '2026-11-03']))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('totals.charges', LIGHTHOUSE_PRICE)
+            ->where('users', [
+                ['userId' => $user->id, 'name' => 'Dana', 'email' => 'dana@example.com', 'generations' => 1, 'charges' => LIGHTHOUSE_PRICE, 'providerCost' => LIGHTHOUSE_PROVIDER_COST, 'profit' => LIGHTHOUSE_PRICE - LIGHTHOUSE_PROVIDER_COST],
+            ]));
+});
+
 it('counts a Generation on the UTC day it completed, not the day it was created', function () {
     $user = User::factory()->withTopUp()->create();
     succeededAt($user, '2026-11-03T23:59:00Z', '2026-11-04T00:01:00Z');

@@ -106,14 +106,15 @@ class CompileAdminReport
     }
 
     /**
-     * The users with activity, biggest spenders first.
+     * The users with activity, biggest spenders first, including those who
+     * have since deleted their account.
      *
      * @param  array<int, Figures>  $byUser
      * @return list<UserRow>
      */
     private function userRows(array $byUser): array
     {
-        $users = User::query()->whereKey(array_keys($byUser))->get()->keyBy('id');
+        $users = User::withTrashed()->whereKey(array_keys($byUser))->get()->keyBy('id');
 
         $rows = array_map(
             fn (int $userId, Figures $figures): UserRow => new UserRow($users[$userId], $figures),
