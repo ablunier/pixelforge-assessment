@@ -73,12 +73,12 @@ final readonly class BilledCosts implements JsonSerializable
     }
 
     /**
-     * What Pixelforge billed on UTC day `$date` (`Y-m-d`), or null when its
-     * report doesn't cover that day.
+     * What Pixelforge billed on UTC day `$date` (`Y-m-d`). A day its report
+     * leaves out counts as nothing billed.
      */
-    public function on(string $date): ?Money
+    public function on(string $date): Money
     {
-        return $this->byDate[$date] ?? null;
+        return $this->byDate[$date] ?? Money::ofNanodollars(0);
     }
 
     /**

@@ -285,6 +285,20 @@ it('flags a day Pixelforge billed less than the Provider Cost with a negative di
             ->where('days.0.costDifference', -LIGHTHOUSE_PROVIDER_COST));
 });
 
+it('counts a day missing from Pixelforge\'s usage as $0 billed, flagging any Provider Cost that day', function () {
+    $user = User::factory()->withTopUp()->create();
+    succeededAt($user, '2026-11-04T09:00:00Z', '2026-11-04T09:00:20Z');
+    // Pixelforge's usage leaves out 2026-11-04.
+    pixelforge()->answerUsage(InMemoryPixelforgeClient::billed(['2026-11-03' => 0]));
+
+    $this->actingAs(admin())
+        ->get(route('admin.report', ['from' => '2026-11-03', 'to' => '2026-11-04']))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('days.1.date', '2026-11-04')
+            ->where('days.1.pixelforgeCost', 0)
+            ->where('days.1.costDifference', -LIGHTHOUSE_PROVIDER_COST));
+});
+
 it('compares the totals against the total Pixelforge reports', function () {
     pixelforge()->answerUsage(InMemoryPixelforgeClient::billed(['2026-11-03' => 0], total: 5));
 
