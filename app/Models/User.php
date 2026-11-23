@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Enums\LedgerEntryKind;
+use App\Money\Money;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -28,6 +30,7 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Collection<int, Generation> $generations
+ * @property-read Collection<int, LedgerEntry> $ledgerEntries
  */
 #[Fillable(['name', 'email', 'password'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
@@ -56,5 +59,26 @@ class User extends Authenticatable implements PasskeyUser
     public function generations(): HasMany
     {
         return $this->hasMany(Generation::class);
+    }
+
+    /**
+     * @return HasMany<LedgerEntry, $this>
+     */
+    public function ledgerEntries(): HasMany
+    {
+        return $this->hasMany(LedgerEntry::class);
+    }
+
+    /**
+     * The Credits this user holds: Top-ups minus Charges, derived from the ledger (ADR-0002).
+     */
+    public function balance(): Money
+    {
+        return $this->ledgerTotal(LedgerEntryKind::TopUp)->minus($this->ledgerTotal(LedgerEntryKind::Charge));
+    }
+
+    private function ledgerTotal(LedgerEntryKind $kind): Money
+    {
+        return Money::ofNanodollars((int) $this->ledgerEntries()->where('kind', $kind)->sum('amount'));
     }
 }
