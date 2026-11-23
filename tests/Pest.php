@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Generation;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Pixelforge\InMemoryPixelforgeClient;
 use Tests\TestCase;
@@ -56,4 +57,17 @@ function something()
 function pixelforge(): InMemoryPixelforgeClient
 {
     return test()->pixelforge();
+}
+
+/**
+ * The ledger entries of `$generation`, as kind => amounts in nanodollars.
+ *
+ * @return array<string, list<int>>
+ */
+function ledgerOf(Generation $generation): array
+{
+    return $generation->user->ledgerEntries()->where('generation_id', $generation->id)->orderBy('id')->get()
+        ->groupBy(fn ($entry): string => $entry->kind->value)
+        ->map(fn ($entries): array => $entries->map(fn ($entry): int => $entry->amount->nanodollars())->all())
+        ->all();
 }

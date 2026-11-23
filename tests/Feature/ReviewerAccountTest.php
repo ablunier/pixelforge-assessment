@@ -1,5 +1,6 @@
 <?php
 
+use App\Credits\InsufficientAvailableBalance;
 use App\Enums\GenerationStatus;
 use App\Jobs\SubmitGenerationToPixelforge;
 use App\Models\Generation;
@@ -77,9 +78,18 @@ it('changes the password when run again with a new one configured', function () 
     $this->assertAuthenticated();
 });
 
+/**
+ * The reviewer account already set up, with Credits to Hold every example.
+ */
+function fundedReviewer(): User
+{
+    return User::factory()->withTopUp()->create(['email' => 'reviewer@example.com']);
+}
+
 it('submits one Generation per sandbox keyword to Pixelforge with --examples', function () {
     config(['reviewer.email' => 'reviewer@example.com', 'reviewer.password' => 'a-long-secret-password']);
     Queue::fake();
+    fundedReviewer();
 
     createReviewer(['--examples' => true]);
 
@@ -97,6 +107,7 @@ it('submits one Generation per sandbox keyword to Pixelforge with --examples', f
 it('only submits the examples the reviewer is missing when run again', function () {
     config(['reviewer.email' => 'reviewer@example.com', 'reviewer.password' => 'a-long-secret-password']);
     Queue::fake();
+    fundedReviewer();
     createReviewer(['--examples' => true]);
     Generation::query()->where('prompt', 'like', '%[slow]%')->delete();
 
@@ -113,6 +124,16 @@ it('stops with the pricing failure, submitting nothing, when there are no rates 
     Queue::fake();
 
     expect(fn () => Artisan::call('reviewer:create', ['--examples' => true]))->toThrow(PricingUnavailable::class);
+
+    expect(Generation::query()->count())->toBe(0);
+    Queue::assertNothingPushed();
+});
+
+it('stops, submitting no example it can\'t Hold, when the reviewer lacks the Credits', function () {
+    config(['reviewer.email' => 'reviewer@example.com', 'reviewer.password' => 'a-long-secret-password']);
+    Queue::fake();
+
+    expect(fn () => Artisan::call('reviewer:create', ['--examples' => true]))->toThrow(InsufficientAvailableBalance::class);
 
     expect(Generation::query()->count())->toBe(0);
     Queue::assertNothingPushed();

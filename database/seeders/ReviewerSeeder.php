@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Actions\GenerationLifecycle;
+use App\Actions\TopUp;
 use App\Console\Commands\CreateReviewer;
 use App\Enums\GenerationStatus;
 use App\Enums\Quality;
@@ -11,6 +12,7 @@ use App\Generations\GenerationParameters;
 use App\Models\Generation;
 use App\Models\User;
 use App\Models\WebhookEvent;
+use App\Money\Money;
 use App\Pixelforge\Answer;
 use App\Pixelforge\GenerationErrorCode;
 use App\Pixelforge\GenerationSnapshot;
@@ -27,9 +29,10 @@ use Illuminate\Support\Str;
  * These Generations are made up (their `gen_` ids exist nowhere), so they're
  * never seeded in production, where every Generation must match Pixelforge's
  * own records: there, `php artisan reviewer:create --examples` submits real
- * ones instead. Each example is created `pending` and then finished through
+ * ones instead. The reviewer is topped up to cover the examples' Holds, and
+ * each example is created `pending` and then finished through
  * GenerationLifecycle with a made-up Pixelforge snapshot, so its status and
- * money follow the real rules. The snapshots carry no image URL, so no image
+ * money (Hold, Charge, Hold release) follow the real rules. The snapshots carry no image URL, so no image
  * download is queued and the history shows the "image expired" placeholder.
  */
 class ReviewerSeeder extends Seeder
@@ -42,7 +45,7 @@ class ReviewerSeeder extends Seeder
         'reasoning_tokens' => '12.50',
     ];
 
-    public function run(GenerationLifecycle $lifecycle): void
+    public function run(GenerationLifecycle $lifecycle, TopUp $topUp): void
     {
         $this->command->call('reviewer:create');
 
@@ -59,24 +62,54 @@ class ReviewerSeeder extends Seeder
         }
 
         $prompts = CreateReviewer::EXAMPLE_PROMPTS;
+        $examples = [
+            'succeed' => new GenerationParameters($prompts['[succeed]'], Size::Landscape, Quality::High, ['https://example.com/style.png']),
+            'duplicate' => new GenerationParameters($prompts['[duplicate]'], Size::Square, Quality::Low, []),
+            'fail' => new GenerationParameters($prompts['[fail]'], Size::Square, Quality::Low, []),
+            'blocked' => new GenerationParameters($prompts['[blocked]'], Size::Square, Quality::Low, []),
+        ];
+
+        $this->topUpToCover($topUp, $reviewer, $examples);
 
         // The Pixelforge docs' example usage.
-        $succeeded = $this->pending($lifecycle, $reviewer, new GenerationParameters($prompts['[succeed]'], Size::Landscape, Quality::High, ['https://example.com/style.png']));
+        $succeeded = $this->pending($lifecycle, $reviewer, $examples['succeed']);
         $lifecycle->apply($succeeded, $this->snapshot($succeeded, GenerationStatus::Succeeded, usage: new Usage(12, 765, 6_450, 3_184)));
         $lifecycle->recordSubmissionAttempt($succeeded, Answer::accepted());
 
         // Each Webhook Event arrived twice; the second delivery of each was a no-op.
-        $duplicate = $this->pending($lifecycle, $reviewer, new GenerationParameters($prompts['[duplicate]'], Size::Square, Quality::Low, []));
+        $duplicate = $this->pending($lifecycle, $reviewer, $examples['duplicate']);
         $duplicate = $lifecycle->apply($duplicate, $this->snapshot($duplicate, GenerationStatus::Succeeded, usage: new Usage(14, 0, 280, 312)));
         $lifecycle->recordSubmissionAttempt($duplicate, Answer::accepted());
         $this->webhookEventsFor($duplicate);
 
-        $failed = $this->pending($lifecycle, $reviewer, new GenerationParameters($prompts['[fail]'], Size::Square, Quality::Low, []));
+        $failed = $this->pending($lifecycle, $reviewer, $examples['fail']);
         $lifecycle->apply($failed, $this->snapshot($failed, GenerationStatus::Failed, error: [GenerationErrorCode::GenerationFailed, "The model couldn't produce an image for this prompt."]));
         $lifecycle->recordSubmissionAttempt($failed, Answer::accepted());
 
-        $blocked = $this->pending($lifecycle, $reviewer, new GenerationParameters($prompts['[blocked]'], Size::Square, Quality::Low, []));
+        $blocked = $this->pending($lifecycle, $reviewer, $examples['blocked']);
         $lifecycle->recordSubmissionAttempt($blocked, Answer::refused(Refusal::Permanent, GenerationErrorCode::ContentPolicyViolation->value, 'This prompt was rejected by our content policy.'));
+    }
+
+    /**
+     * Top the reviewer up by whatever their Available Balance lacks to Hold
+     * every example's Maximum Price, so each takes the same Hold-then-Charge
+     * path as a real Generation.
+     *
+     * @param  array<string, GenerationParameters>  $examples
+     */
+    private function topUpToCover(TopUp $topUp, User $reviewer, array $examples): void
+    {
+        $needed = array_reduce(
+            $examples,
+            fn (Money $total, GenerationParameters $parameters): Money => $total->plus($parameters->maximumPrice(Rates::fromPixelforge(self::RATES))),
+            Money::ofNanodollars(0),
+        );
+
+        $shortfall = $needed->minus($reviewer->availableBalance());
+
+        if ($shortfall->isGreaterThan(Money::ofNanodollars(0))) {
+            $topUp->handle($reviewer, $shortfall);
+        }
     }
 
     /**

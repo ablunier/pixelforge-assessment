@@ -30,7 +30,7 @@ beforeEach(function () {
  */
 function generateLighthouse(?User $user = null): Generation
 {
-    test()->actingAs($user ?? User::factory()->create())
+    test()->actingAs($user ?? User::factory()->withTopUp()->create())
         ->post(route('generations.store'), [
             'prompt' => 'A lighthouse on a cliff at dawn, oil painting',
             'size' => '1536x1024',

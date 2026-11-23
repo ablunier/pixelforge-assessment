@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Actions\CreateGeneration;
+use App\Credits\InsufficientAvailableBalance;
 use App\Generations\GenerationParameters;
 use App\Http\Requests\StoreGenerationRequest;
 use App\Http\Requests\TryAgainRequest;
@@ -39,7 +40,8 @@ class GenerationController extends Controller
     }
 
     /**
-     * @throws ValidationException under `generate` when there are no rates to price it with
+     * @throws ValidationException under `generate` when there are no rates to
+     *                             price it with, or the Available Balance can't cover its Maximum Price
      */
     private function create(User $user, GenerationParameters $parameters): void
     {
@@ -50,6 +52,10 @@ class GenerationController extends Controller
 
             throw ValidationException::withMessages([
                 'generate' => "Prices can't be loaded right now, so nothing was submitted. Try again in a minute.",
+            ]);
+        } catch (InsufficientAvailableBalance $exception) {
+            throw ValidationException::withMessages([
+                'generate' => "Not enough credits: \${$exception->availableBalance->formatForDisplay()} available, up to \${$exception->maximumPrice->formatForDisplay()} needed. Buy credits to continue.",
             ]);
         }
     }

@@ -25,7 +25,7 @@ function generateForm(): array
 }
 
 it('refuses to start a Generation while the user already has the most in progress', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->withTopUp()->create();
     Generation::factory()->for($user)->count(StoreGenerationRequest::MAX_GENERATIONS_IN_PROGRESS)
         ->sequence(['status' => GenerationStatus::Pending], ['status' => GenerationStatus::Queued], ['status' => GenerationStatus::Processing])
         ->create();
@@ -41,7 +41,7 @@ it('refuses to start a Generation while the user already has the most in progres
 });
 
 it('starts a Generation again once one in progress is final', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->withTopUp()->create();
     Generation::factory()->for($user)->count(StoreGenerationRequest::MAX_GENERATIONS_IN_PROGRESS - 1)->create();
     Generation::factory()->for($user)->succeeded()->create();
 
@@ -53,7 +53,7 @@ it('starts a Generation again once one in progress is final', function () {
 });
 
 it('refuses to start more Generations than the daily limit in any 24 hours', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->withTopUp()->create();
     Generation::factory()->for($user)->succeeded()->count(StoreGenerationRequest::MAX_GENERATIONS_PER_DAY)->create();
 
     $this->actingAs($user)
@@ -71,7 +71,7 @@ it('refuses to start more Generations than the daily limit in any 24 hours', fun
 });
 
 it('applies the same limits to Try again', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->withTopUp()->create();
     $failed = Generation::factory()->for($user)->failed()->create();
     Generation::factory()->for($user)->count(StoreGenerationRequest::MAX_GENERATIONS_IN_PROGRESS)->create();
 
@@ -83,7 +83,7 @@ it('applies the same limits to Try again', function () {
 });
 
 it('throttles how many Generations a user starts per minute, counting Try again', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->withTopUp()->create();
     $failed = Generation::factory()->for($user)->failed()->create();
 
     for ($i = 0; $i < AppServiceProvider::GENERATIONS_PER_MINUTE; $i++) {
@@ -98,7 +98,7 @@ it('throttles how many Generations a user starts per minute, counting Try again'
         ->assertSessionHasErrors(['generate' => 'Too many Generations at once. Wait a minute, then try again.']);
 
     // Other users aren't held up.
-    $this->actingAs(User::factory()->create())
+    $this->actingAs(User::factory()->withTopUp()->create())
         ->post(route('generations.store'), generateForm())
         ->assertSessionHasNoErrors();
 
@@ -110,7 +110,7 @@ it('throttles how many Generations a user starts per minute, counting Try again'
 });
 
 it('never throttles live validation of the generate form', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->withTopUp()->create();
 
     for ($i = 0; $i <= AppServiceProvider::GENERATIONS_PER_MINUTE; $i++) {
         $this->actingAs($user)
