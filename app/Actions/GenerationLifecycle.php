@@ -24,7 +24,7 @@ use LogicException;
  * Every `pending` Generation starts in open(), and every provider snapshot
  * (create response, poll or Webhook Event) goes through apply().
  *
- * Each later change runs in a transaction holding the Generation's row lock, and
+ * Each change to an opened Generation runs in a transaction holding its row lock, and
  * status only moves forward (GenerationStatus::canMoveTo()), so duplicate,
  * stale or out-of-order snapshots are ignored and the single transition into
  * `succeeded` records the Price exactly once.
