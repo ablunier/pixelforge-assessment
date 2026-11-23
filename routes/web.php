@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AdminReportController;
 use App\Http\Controllers\CreditsController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\GenerationController;
@@ -23,6 +24,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('generations.image.download');
     Route::get('credits', [CreditsController::class, 'show'])->name('credits.show');
     Route::post('credits', [CreditsController::class, 'store'])->name('credits.store');
+    Route::get('admin/report', AdminReportController::class)
+        ->can('viewAdminReport')
+        ->name('admin.report');
 });
 
 require __DIR__.'/settings.php';

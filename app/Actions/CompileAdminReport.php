@@ -1,0 +1,102 @@
+<?php
+
+namespace App\Actions;
+
+use App\Enums\GenerationStatus;
+use App\Enums\LedgerEntryKind;
+use App\Models\Generation;
+use App\Models\User;
+use App\Money\Money;
+use App\Reports\AdminReport;
+use App\Reports\DailyRow;
+use App\Reports\DateRange;
+use App\Reports\Figures;
+use App\Reports\UserRow;
+use Illuminate\Database\Query\JoinClause;
+use Illuminate\Support\Collection;
+
+/**
+ * Compile the admin report for a date range from local data: the succeeded
+ * Generations, counted on the UTC day they completed (as Pixelforge bills),
+ * with their Provider Costs and Charges. A Generation from before Balances
+ * existed has no Charge and counts as zero user spend.
+ */
+class CompileAdminReport
+{
+    public function handle(DateRange $range): AdminReport
+    {
+        $buckets = $this->figuresByDayAndUser($range);
+
+        $byDay = [];
+        $byUser = [];
+        foreach ($buckets as ['day' => $day, 'userId' => $userId, 'figures' => $figures]) {
+            $byDay[$day] = ($byDay[$day] ?? Figures::none())->plus($figures);
+            $byUser[$userId] = ($byUser[$userId] ?? Figures::none())->plus($figures);
+        }
+
+        $days = array_map(
+            fn (string $date): DailyRow => new DailyRow($date, $byDay[$date] ?? Figures::none()),
+            $range->dates(),
+        );
+
+        return new AdminReport($range, $days, $this->userRows($byUser));
+    }
+
+    /**
+     * One bucket per UTC completion day and user with succeeded Generations.
+     * The ledger allows at most one Charge per Generation, so the join never
+     * counts a Generation twice.
+     *
+     * @return Collection<int, array{day: string, userId: int, figures: Figures}>
+     */
+    private function figuresByDayAndUser(DateRange $range): Collection
+    {
+        return Generation::query()
+            ->toBase()
+            ->leftJoin('ledger_entries as charges', fn (JoinClause $join) => $join
+                ->on('charges.generation_id', '=', 'generations.id')
+                ->where('charges.kind', LedgerEntryKind::Charge->value))
+            ->where('generations.status', GenerationStatus::Succeeded->value)
+            ->where('generations.completed_at', '>=', $range->from)
+            ->where('generations.completed_at', '<', $range->endExclusive())
+            // Timestamps are stored in UTC, so the date part is the UTC day.
+            ->selectRaw('cast(generations.completed_at as date) as day')
+            ->addSelect('generations.user_id')
+            ->selectRaw('count(*) as generations')
+            ->selectRaw('coalesce(sum(generations.provider_cost), 0) as provider_cost')
+            ->selectRaw('coalesce(sum(charges.amount), 0) as charges')
+            ->groupByRaw('cast(generations.completed_at as date), generations.user_id')
+            ->get()
+            ->map(fn (object $row): array => [
+                'day' => (string) $row->day,
+                'userId' => (int) $row->user_id,
+                'figures' => new Figures(
+                    (int) $row->generations,
+                    Money::ofNanodollars((int) $row->charges),
+                    Money::ofNanodollars((int) $row->provider_cost),
+                ),
+            ]);
+    }
+
+    /**
+     * The users with activity, biggest spenders first.
+     *
+     * @param  array<int, Figures>  $byUser
+     * @return list<UserRow>
+     */
+    private function userRows(array $byUser): array
+    {
+        $users = User::query()->whereKey(array_keys($byUser))->get()->keyBy('id');
+
+        $rows = array_map(
+            fn (int $userId, Figures $figures): UserRow => new UserRow($users[$userId], $figures),
+            array_keys($byUser),
+            $byUser,
+        );
+
+        usort($rows, fn (UserRow $a, UserRow $b): int => [$b->figures->charges->nanodollars(), $a->user->id]
+            <=> [$a->figures->charges->nanodollars(), $b->user->id]);
+
+        return $rows;
+    }
+}

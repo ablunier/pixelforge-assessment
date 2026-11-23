@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Models\User;
 use App\Pixelforge\CachingPixelforgeClient;
 use App\Pixelforge\HttpPixelforgeClient;
 use App\Pixelforge\PixelforgeClient;
@@ -14,6 +15,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
@@ -45,6 +47,15 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->configureDefaults();
         $this->configureRateLimiting();
+        $this->configureGates();
+    }
+
+    /**
+     * Only admins see the admin report: the business's Charges, Provider Costs and Profit.
+     */
+    protected function configureGates(): void
+    {
+        Gate::define('viewAdminReport', fn (User $user): bool => $user->is_admin);
     }
 
     /**
