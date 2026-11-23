@@ -3,6 +3,7 @@
 namespace App\Pixelforge;
 
 use App\Money\Money;
+use Carbon\CarbonImmutable;
 use InvalidArgumentException;
 use JsonSerializable;
 
@@ -73,12 +74,12 @@ final readonly class PixelforgeBilled implements JsonSerializable
     }
 
     /**
-     * What Pixelforge billed on UTC day `$date` (`Y-m-d`). A day its report
+     * What Pixelforge billed on the UTC day `$day` falls on. A day its report
      * leaves out counts as nothing billed.
      */
-    public function on(string $date): Money
+    public function on(CarbonImmutable $day): Money
     {
-        return $this->byDate[$date] ?? Money::zero();
+        return $this->byDate[$day->utc()->toDateString()] ?? Money::zero();
     }
 
     /**

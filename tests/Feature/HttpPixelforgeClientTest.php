@@ -172,10 +172,10 @@ it('reads what Pixelforge billed per UTC day from GET /v1/usage, exactly', funct
     Http::assertSent(fn (Request $request) => $request->method() === 'GET'
         && $request->url() === 'https://pixelforge.test/v1/usage?start_date=2026-11-01&end_date=2026-11-02'
         && $request->hasHeader('Authorization', 'Bearer pf_test_key'));
-    expect($billed->on('2026-11-01')->nanodollars())->toBe(169_080_001)
-        ->and($billed->on('2026-11-02')->nanodollars())->toBe(0)
+    expect($billed->on(CarbonImmutable::parse('2026-11-01'))->nanodollars())->toBe(169_080_001)
+        ->and($billed->on(CarbonImmutable::parse('2026-11-02'))->nanodollars())->toBe(0)
         // A day the answer leaves out counts as nothing billed.
-        ->and($billed->on('2026-11-03')->nanodollars())->toBe(0)
+        ->and($billed->on(CarbonImmutable::parse('2026-11-03'))->nanodollars())->toBe(0)
         ->and($billed->total->nanodollars())->toBe(169_080_001);
 });
 

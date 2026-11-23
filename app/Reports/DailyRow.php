@@ -2,6 +2,7 @@
 
 namespace App\Reports;
 
+use Carbon\CarbonImmutable;
 use JsonSerializable;
 
 /**
@@ -11,16 +12,18 @@ use JsonSerializable;
 final readonly class DailyRow implements JsonSerializable
 {
     public function __construct(
-        /** The UTC day, as `Y-m-d`. */
-        public string $date,
+        /** The start of the UTC day. */
+        public CarbonImmutable $day,
         public ComparedTotals $compared,
     ) {}
 
     /**
+     * The day as `Y-m-d`, and amounts in integer nanodollars.
+     *
      * @return array<string, int|string|null>
      */
     public function jsonSerialize(): array
     {
-        return ['date' => $this->date, ...$this->compared->jsonSerialize()];
+        return ['date' => $this->day->toDateString(), ...$this->compared->jsonSerialize()];
     }
 }

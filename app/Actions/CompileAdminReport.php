@@ -18,6 +18,7 @@ use App\Reports\DailyRow;
 use App\Reports\DateRange;
 use App\Reports\GenerationTotals;
 use App\Reports\UserRow;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Query\JoinClause;
 use Illuminate\Support\Collection;
 
@@ -48,8 +49,8 @@ class CompileAdminReport
         $billed = $this->billed($range);
 
         $days = array_map(
-            fn (string $date): DailyRow => new DailyRow($date, new ComparedTotals($byDay[$date] ?? GenerationTotals::none(), $billed?->on($date))),
-            $range->dates(),
+            fn (CarbonImmutable $day): DailyRow => new DailyRow($day, new ComparedTotals($byDay[$day->toDateString()] ?? GenerationTotals::none(), $billed?->on($day))),
+            $range->days(),
         );
 
         return new AdminReport($range, $days, $this->userRows($byUser), $billed);
