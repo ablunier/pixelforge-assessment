@@ -1,5 +1,6 @@
 <?php
 
+use App\Pricing\Rates;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -51,6 +52,29 @@ function something()
 }
 
 /**
+ * The rates Pixelforge's docs publish, in its wire format.
+ *
+ * @return array<string, string>
+ */
+function docsPublishedRates(): array
+{
+    return [
+        'input_text_tokens' => '5.00',
+        'input_image_tokens' => '10.00',
+        'output_tokens' => '40.00',
+        'reasoning_tokens' => '12.50',
+    ];
+}
+
+/**
+ * The rates fakePixelforgePricing() quotes.
+ */
+function pixelforgeRates(): Rates
+{
+    return Rates::fromPixelforge(docsPublishedRates());
+}
+
+/**
  * Fake Pixelforge's GET /v1/pricing with the rates its docs publish.
  */
 function fakePixelforgePricing(): void
@@ -60,12 +84,7 @@ function fakePixelforgePricing(): void
             'object' => 'pricing',
             'currency' => 'usd',
             'unit' => 'per_1m_tokens',
-            'rates' => [
-                'input_text_tokens' => '5.00',
-                'input_image_tokens' => '10.00',
-                'output_tokens' => '40.00',
-                'reasoning_tokens' => '12.50',
-            ],
+            'rates' => docsPublishedRates(),
         ]),
     ]);
 }

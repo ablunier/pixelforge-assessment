@@ -69,12 +69,13 @@ class SubmitGenerationToPixelforge implements ShouldBeUniqueUntilProcessing, Sho
     private function submit(Generation $generation, PixelforgeClient $pixelforge, GenerationLifecycle $lifecycle): Answer
     {
         try {
+            $parameters = $generation->parameters();
             $snapshot = $pixelforge->createGeneration(
                 $generation->id,
-                $generation->prompt,
-                $generation->size,
-                $generation->quality,
-                $generation->reference_images,
+                $parameters->prompt,
+                $parameters->size,
+                $parameters->quality,
+                $parameters->referenceImages,
             );
         } catch (PixelforgeError $error) {
             // Our own misconfiguration, not the Generation's fault: report it loudly.

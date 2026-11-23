@@ -12,6 +12,10 @@ _Avoid_: the API, the model, upstream
 One request to produce an image from a prompt, size, quality and optional reference images, tracked from submission to a final outcome.
 _Avoid_: job, image request, render
 
+**Generation Parameters**:
+What the user chooses for a Generation: its prompt, size, quality and reference images. They set its Price Range and Maximum Price, and Try again reuses them.
+_Avoid_: options, settings, request
+
 **Generation Status**:
 Where a Generation is in its lifecycle: `pending` (saved here, not yet accepted by Pixelforge), then `queued`, `processing`, and finally `succeeded` or `failed`. Status only moves forward; `succeeded` and `failed` are final.
 _Avoid_: state, phase
@@ -57,11 +61,11 @@ What the user pays for a succeeded Generation: Provider Cost plus Markup, exact 
 _Avoid_: cost (reserved for Provider Cost), fee, amount
 
 **Maximum Price**:
-The highest Price a Generation can possibly reach given its parameters, known before submission. It's the headline figure in the estimate shown to the user.
+The highest Price a Generation can possibly reach given its Generation Parameters, known before submission. It's the headline figure in the estimate shown to the user.
 _Avoid_: quote, estimate (when meaning the single upper figure)
 
 **Price Range**:
-The lowest and highest Price a Generation can reach given its parameters, shown before submission.
+The lowest and highest Price a Generation can reach given its Generation Parameters, shown before submission.
 _Avoid_: estimate band
 
 **Credits**:
