@@ -18,7 +18,7 @@ beforeEach(function () {
 });
 
 it('creates a new pending Generation with the same parameters when trying a failed Generation again', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->withTopUp()->create();
     $failed = Generation::factory()->for($user)->failed()->create([
         'prompt' => 'A lighthouse on a cliff at dawn, oil painting',
         'size' => Size::from('1536x1024'),
@@ -59,7 +59,7 @@ it('creates a new pending Generation with the same parameters when trying a fail
 it('creates nothing and says why when there are no rates to price the new Generation with', function () {
     Exceptions::fake();
     pixelforge()->answerRates(NoAnswer::Unreachable);
-    $user = User::factory()->create();
+    $user = User::factory()->withTopUp()->create();
     $failed = Generation::factory()->for($user)->failed()->create();
 
     $this->actingAs($user)
@@ -72,7 +72,7 @@ it('creates nothing and says why when there are no rates to price the new Genera
 });
 
 it('rejects trying again a Generation that isn\'t failed', function (string $state) {
-    $user = User::factory()->create();
+    $user = User::factory()->withTopUp()->create();
     $generation = match ($state) {
         'pending' => Generation::factory()->for($user)->create(),
         'queued' => Generation::factory()->for($user)->accepted()->create(),
@@ -90,7 +90,7 @@ it('rejects trying again a Generation that isn\'t failed', function (string $sta
 it('rejects trying again another user\'s failed Generation', function () {
     $theirs = Generation::factory()->for(User::factory())->failed()->create();
 
-    $this->actingAs(User::factory()->create())
+    $this->actingAs(User::factory()->withTopUp()->create())
         ->post(route('generations.try-again', $theirs))
         ->assertForbidden();
 

@@ -141,7 +141,7 @@ it('refreshes only the history when polled, without asking Pixelforge for rates'
 
 it('shows a newly submitted Generation at the top of the history as pending, and keeps polling', function () {
     Queue::fake();
-    $user = User::factory()->create();
+    $user = User::factory()->withTopUp()->create();
     Generation::factory()->for($user)->succeeded()->create();
     $this->travel(1)->minute();
 

@@ -28,7 +28,7 @@ beforeEach(function () {
  */
 function pressGenerate(string $prompt = 'A lighthouse on a cliff at dawn, oil painting'): Generation
 {
-    test()->actingAs(User::factory()->create())
+    test()->actingAs(User::factory()->withTopUp()->create())
         ->post(route('generations.store'), [
             'prompt' => $prompt,
             'size' => '1536x1024',
@@ -219,7 +219,7 @@ it('resubmits a pending Generation whose submission died, and it reaches queued'
 });
 
 it('explains each failure in plain language in the history', function (string $code, string $reason) {
-    $user = User::factory()->create();
+    $user = User::factory()->withTopUp()->create();
     Generation::factory()->for($user)->failed()
         ->afterMaking(fn (Generation $generation) => $generation->error_code = $code)
         ->create(['submission_attempts' => 5]);

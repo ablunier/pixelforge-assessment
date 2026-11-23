@@ -77,6 +77,20 @@ class User extends Authenticatable implements PasskeyUser
         return $this->ledgerTotal(LedgerEntryKind::TopUp)->minus($this->ledgerTotal(LedgerEntryKind::Charge));
     }
 
+    /**
+     * What this user can still commit to new Generations: the Balance minus
+     * active Holds, the part of each Hold not yet settled by its Charge or
+     * Hold release (ADR-0002).
+     */
+    public function availableBalance(): Money
+    {
+        $activeHolds = $this->ledgerTotal(LedgerEntryKind::Hold)
+            ->minus($this->ledgerTotal(LedgerEntryKind::Charge))
+            ->minus($this->ledgerTotal(LedgerEntryKind::HoldRelease));
+
+        return $this->balance()->minus($activeHolds);
+    }
+
     private function ledgerTotal(LedgerEntryKind $kind): Money
     {
         return Money::ofNanodollars((int) $this->ledgerEntries()->where('kind', $kind)->sum('amount'));
