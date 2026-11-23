@@ -8,10 +8,14 @@ use App\Generations\GenerationParameters;
 use App\Models\Generation;
 use App\Models\User;
 use App\Pixelforge\GenerationSnapshot;
+use App\Pixelforge\PixelforgeError;
 use App\Pricing\Usage;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\Exceptions;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\Pixelforge\InMemoryPixelforgeClient;
+use Tests\Pixelforge\NoAnswer;
+use Tests\Pixelforge\UsageRequest;
 
 /*
  * The docs' lighthouse example, succeeded with the docs' usage at the
@@ -130,10 +134,10 @@ it('covers the last 30 UTC days by default, with a row for each day even without
         ->assertInertia(fn (Assert $page) => $page
             ->where('range', ['from' => '2026-10-25', 'to' => '2026-11-23', 'maxDays' => 92])
             ->has('days', 30)
-            ->where('days.0', ['date' => '2026-10-25', 'generations' => 0, 'charges' => 0, 'providerCost' => 0, 'profit' => 0])
+            ->where('days.0', ['date' => '2026-10-25', 'generations' => 0, 'charges' => 0, 'providerCost' => 0, 'profit' => 0, 'pixelforgeCost' => 0, 'costDifference' => 0])
             ->where('days.29.date', '2026-11-23')
             ->has('users', 0)
-            ->where('totals', ['generations' => 0, 'charges' => 0, 'providerCost' => 0, 'profit' => 0]));
+            ->where('totals', ['generations' => 0, 'charges' => 0, 'providerCost' => 0, 'profit' => 0, 'pixelforgeCost' => 0, 'costDifference' => 0]));
 });
 
 it('counts only Generations that succeeded within the range', function () {
@@ -147,7 +151,7 @@ it('counts only Generations that succeeded within the range', function () {
     $this->actingAs(admin())
         ->get(route('admin.report', ['from' => '2026-11-03', 'to' => '2026-11-04']))
         ->assertInertia(fn (Assert $page) => $page
-            ->where('totals', ['generations' => 0, 'charges' => 0, 'providerCost' => 0, 'profit' => 0])
+            ->where('totals', ['generations' => 0, 'charges' => 0, 'providerCost' => 0, 'profit' => 0, 'pixelforgeCost' => 0, 'costDifference' => 0])
             ->has('users', 0));
 });
 
@@ -159,7 +163,7 @@ it('counts the Provider Cost of a Generation from before Balances existed, with 
         ->get(route('admin.report', ['from' => '2026-11-03', 'to' => '2026-11-03']))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
-            ->where('totals', ['generations' => 1, 'charges' => 0, 'providerCost' => LIGHTHOUSE_PROVIDER_COST, 'profit' => -LIGHTHOUSE_PROVIDER_COST])
+            ->where('totals', ['generations' => 1, 'charges' => 0, 'providerCost' => LIGHTHOUSE_PROVIDER_COST, 'profit' => -LIGHTHOUSE_PROVIDER_COST, 'pixelforgeCost' => 0, 'costDifference' => -LIGHTHOUSE_PROVIDER_COST])
             ->where('users.0.userId', $generation->user_id)
             ->where('users.0.charges', 0));
 });
@@ -176,16 +180,17 @@ it('totals Charges, Provider Cost and Profit exactly, per day and per user', fun
     succeededAt($bob, '2026-11-04T23:00:00Z', '2026-11-04T23:00:20Z');
     // From before Balances existed: no Charge.
     Generation::factory()->for($carol)->succeeded()->create(['completed_at' => '2026-11-03T15:00:00Z']);
+    pixelforge()->answerUsage(InMemoryPixelforgeClient::billed(['2026-11-03' => 611_020_000, '2026-11-04' => 626_190_000]));
 
     $response = $this->actingAs(admin())
         ->get(route('admin.report', ['from' => '2026-11-03', 'to' => '2026-11-04']));
 
     $response->assertInertia(fn (Assert $page) => $page
         ->where('days', [
-            ['date' => '2026-11-03', 'generations' => 2, 'charges' => 381_887_500, 'providerCost' => 611_020_000, 'profit' => -229_132_500],
-            ['date' => '2026-11-04', 'generations' => 3, 'charges' => 782_737_500, 'providerCost' => 626_190_000, 'profit' => 156_547_500],
+            ['date' => '2026-11-03', 'generations' => 2, 'charges' => 381_887_500, 'providerCost' => 611_020_000, 'profit' => -229_132_500, 'pixelforgeCost' => 611_020_000, 'costDifference' => 0],
+            ['date' => '2026-11-04', 'generations' => 3, 'charges' => 782_737_500, 'providerCost' => 626_190_000, 'profit' => 156_547_500, 'pixelforgeCost' => 626_190_000, 'costDifference' => 0],
         ])
-        ->where('totals', ['generations' => 5, 'charges' => 1_164_625_000, 'providerCost' => 1_237_210_000, 'profit' => -72_585_000])
+        ->where('totals', ['generations' => 5, 'charges' => 1_164_625_000, 'providerCost' => 1_237_210_000, 'profit' => -72_585_000, 'pixelforgeCost' => 1_237_210_000, 'costDifference' => 0])
         ->where('users', [
             ['userId' => $bob->id, 'name' => 'Bob', 'email' => 'bob@example.com', 'generations' => 2, 'charges' => 763_775_000, 'providerCost' => 611_020_000, 'profit' => 152_755_000],
             ['userId' => $alice->id, 'name' => 'Alice', 'email' => 'alice@example.com', 'generations' => 2, 'charges' => 400_850_000, 'providerCost' => 320_680_000, 'profit' => 80_170_000],
@@ -207,12 +212,125 @@ it('counts a Generation on the UTC day it completed, not the day it was created'
     $this->actingAs(admin())
         ->get(route('admin.report', ['from' => '2026-11-03', 'to' => '2026-11-04']))
         ->assertInertia(fn (Assert $page) => $page
-            ->where('days.0', ['date' => '2026-11-03', 'generations' => 0, 'charges' => 0, 'providerCost' => 0, 'profit' => 0])
+            ->where('days.0', ['date' => '2026-11-03', 'generations' => 0, 'charges' => 0, 'providerCost' => 0, 'profit' => 0, 'pixelforgeCost' => 0, 'costDifference' => 0])
             ->where('days.1', [
                 'date' => '2026-11-04',
                 'generations' => 1,
                 'charges' => LIGHTHOUSE_PRICE,
                 'providerCost' => LIGHTHOUSE_PROVIDER_COST,
                 'profit' => 76_377_500,
+                'pixelforgeCost' => 0,
+                'costDifference' => -LIGHTHOUSE_PROVIDER_COST,
             ]));
+});
+
+it('asks Pixelforge what it billed for the selected days', function () {
+    $this->actingAs(admin())
+        ->get(route('admin.report', ['from' => '2026-11-03', 'to' => '2026-11-04']))
+        ->assertOk();
+
+    expect(pixelforge()->usageRequests())->toEqual([new UsageRequest('2026-11-03', '2026-11-04')]);
+});
+
+it('shows what Pixelforge billed each day, flagging only the days it differs from the Provider Cost', function () {
+    $user = User::factory()->withTopUp()->create();
+    succeededAt($user, '2026-11-03T09:00:00Z', '2026-11-03T09:00:20Z');
+    succeededAt($user, '2026-11-04T09:00:00Z', '2026-11-04T09:00:20Z');
+    pixelforge()->answerUsage(InMemoryPixelforgeClient::billed([
+        '2026-11-03' => LIGHTHOUSE_PROVIDER_COST,
+        // One nanodollar more than recorded here.
+        '2026-11-04' => LIGHTHOUSE_PROVIDER_COST + 1,
+        '2026-11-05' => 0,
+    ]));
+
+    $this->actingAs(admin())
+        ->get(route('admin.report', ['from' => '2026-11-03', 'to' => '2026-11-05']))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('pixelforgeReachable', true)
+            ->where('days.0.pixelforgeCost', LIGHTHOUSE_PROVIDER_COST)
+            ->where('days.0.costDifference', 0)
+            ->where('days.1.pixelforgeCost', LIGHTHOUSE_PROVIDER_COST + 1)
+            ->where('days.1.costDifference', 1)
+            ->where('days.2.pixelforgeCost', 0)
+            ->where('days.2.costDifference', 0)
+            ->where('totals.providerCost', 611_020_000)
+            ->where('totals.pixelforgeCost', 611_020_001)
+            ->where('totals.costDifference', 1));
+});
+
+it('flags a day Pixelforge billed less than the Provider Cost with a negative difference', function () {
+    $user = User::factory()->withTopUp()->create();
+    succeededAt($user, '2026-11-03T09:00:00Z', '2026-11-03T09:00:20Z');
+    pixelforge()->answerUsage(InMemoryPixelforgeClient::billed(['2026-11-03' => 0]));
+
+    $this->actingAs(admin())
+        ->get(route('admin.report', ['from' => '2026-11-03', 'to' => '2026-11-03']))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('days.0.pixelforgeCost', 0)
+            ->where('days.0.costDifference', -LIGHTHOUSE_PROVIDER_COST));
+});
+
+it('compares the totals against the total Pixelforge reports', function () {
+    pixelforge()->answerUsage(InMemoryPixelforgeClient::billed(['2026-11-03' => 0], total: 5));
+
+    $this->actingAs(admin())
+        ->get(route('admin.report', ['from' => '2026-11-03', 'to' => '2026-11-03']))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('days.0.costDifference', 0)
+            ->where('totals.pixelforgeCost', 5)
+            ->where('totals.costDifference', 5));
+});
+
+it('still shows the local figures when Pixelforge\'s usage can\'t be had', function (PixelforgeError|NoAnswer $answer) {
+    Exceptions::fake();
+    $user = User::factory()->withTopUp()->create();
+    succeededAt($user, '2026-11-03T09:00:00Z', '2026-11-03T09:00:20Z');
+    pixelforge()->answerUsage($answer);
+
+    $this->actingAs(admin())
+        ->get(route('admin.report', ['from' => '2026-11-03', 'to' => '2026-11-03']))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('pixelforgeReachable', false)
+            ->where('days.0.providerCost', LIGHTHOUSE_PROVIDER_COST)
+            ->where('days.0.pixelforgeCost', null)
+            ->where('days.0.costDifference', null)
+            ->where('totals.providerCost', LIGHTHOUSE_PROVIDER_COST)
+            ->where('totals.pixelforgeCost', null)
+            ->where('totals.costDifference', null));
+})->with([
+    'rate limited' => [InMemoryPixelforgeClient::refusal('rate_limit_exceeded', retryAfter: 1)],
+    'overloaded' => [InMemoryPixelforgeClient::refusal('overloaded')],
+    'our API key refused' => [InMemoryPixelforgeClient::refusal('invalid_api_key')],
+    'unreachable' => [NoAnswer::Unreachable],
+    'unreadable' => [NoAnswer::Unreadable],
+]);
+
+it('asks Pixelforge again for the same days only after a minute', function () {
+    $range = ['from' => '2026-11-03', 'to' => '2026-11-04'];
+    $this->actingAs(admin());
+
+    $this->get(route('admin.report', $range));
+    $this->travel(59)->seconds();
+    $this->get(route('admin.report', $range));
+    expect(pixelforge()->usageRequests())->toHaveCount(1);
+
+    $this->get(route('admin.report', ['from' => '2026-11-03', 'to' => '2026-11-05']));
+    expect(pixelforge()->usageRequests())->toHaveCount(2);
+
+    $this->travel(2)->seconds();
+    $this->get(route('admin.report', $range));
+    expect(pixelforge()->usageRequests())->toHaveCount(3);
+});
+
+it('asks Pixelforge again on the next refresh after its usage couldn\'t be had', function () {
+    Exceptions::fake();
+    pixelforge()->answerUsage(InMemoryPixelforgeClient::refusal('overloaded'));
+    $range = ['from' => '2026-11-03', 'to' => '2026-11-03'];
+    $this->actingAs(admin());
+
+    $this->get(route('admin.report', $range))->assertInertia(fn (Assert $page) => $page->where('pixelforgeReachable', false));
+    $this->get(route('admin.report', $range))->assertInertia(fn (Assert $page) => $page->where('pixelforgeReachable', true));
+
+    expect(pixelforge()->usageRequests())->toHaveCount(2);
 });

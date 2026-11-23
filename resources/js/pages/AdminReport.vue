@@ -1,17 +1,22 @@
 <script setup lang="ts">
 import { Head, useForm } from '@inertiajs/vue3';
+import { CloudOff } from '@lucide/vue';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
+import PixelforgeCost from '@/components/PixelforgeCost.vue';
 import Price from '@/components/Price.vue';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { report } from '@/routes/admin';
 import type {
+    ReportCostComparison,
     ReportDay,
     ReportFigures,
     ReportRange,
+    ReportTotals,
     ReportUser,
 } from '@/types';
 
@@ -32,7 +37,9 @@ const props = defineProps<{
     days: ReportDay[];
     /** One row per user with activity in the range, biggest spenders first. */
     users: ReportUser[];
-    totals: ReportFigures;
+    totals: ReportTotals;
+    /** Whether Pixelforge's usage could be had to compare the Provider Costs against. */
+    pixelforgeReachable: boolean;
 }>();
 
 const form = useForm(report(), {
@@ -52,6 +59,15 @@ const figureColumns: { key: keyof ReportFigures; label: string }[] = [
 
 function profitClass(profit: number): string {
     return cn(profit < 0 && 'text-red-600 dark:text-red-400');
+}
+
+/** Highlights a row whose Provider Cost doesn't match what Pixelforge billed. */
+function mismatchClass({ costDifference }: ReportCostComparison): string {
+    return cn(
+        costDifference !== null &&
+            costDifference !== 0 &&
+            'bg-amber-50 dark:bg-amber-950/40',
+    );
 }
 </script>
 
@@ -89,8 +105,21 @@ function profitClass(profit: number): string {
         >
             <Heading
                 title="Daily"
-                :description="`${range.from} to ${range.to}`"
+                :description="`${range.from} to ${range.to}. Days where Pixelforge billed a different amount from the recorded Provider Cost are highlighted, with Pixelforge's figure minus ours.`"
             />
+            <Alert
+                v-if="!pixelforgeReachable"
+                class="mb-4"
+                data-test="pixelforge-unreachable"
+            >
+                <CloudOff />
+                <AlertTitle>Couldn't reach Pixelforge</AlertTitle>
+                <AlertDescription>
+                    The figures below are this app's own records. What
+                    Pixelforge billed can't be compared right now; refresh in a
+                    minute to try again.
+                </AlertDescription>
+            </Alert>
             <div class="overflow-x-auto">
                 <table class="w-full text-sm" data-test="report-days">
                     <thead>
@@ -99,57 +128,93 @@ function profitClass(profit: number): string {
                             <th class="py-2 pr-4 text-right font-medium">
                                 Generations
                             </th>
-                            <th
+                            <template
                                 v-for="column in figureColumns"
                                 :key="column.key"
-                                class="py-2 pr-4 text-right font-medium"
                             >
-                                {{ column.label }}
-                            </th>
+                                <th class="py-2 pr-4 text-right font-medium">
+                                    {{ column.label }}
+                                </th>
+                                <th
+                                    v-if="column.key === 'providerCost'"
+                                    class="py-2 pr-4 text-right font-medium"
+                                >
+                                    Pixelforge reports
+                                </th>
+                            </template>
                         </tr>
                     </thead>
                     <tbody class="divide-y">
-                        <tr v-for="day in days" :key="day.date">
+                        <tr
+                            v-for="day in days"
+                            :key="day.date"
+                            :class="mismatchClass(day)"
+                        >
                             <td class="py-2 pr-4 tabular-nums">
                                 {{ day.date }}
                             </td>
                             <td class="py-2 pr-4 text-right tabular-nums">
                                 {{ day.generations }}
                             </td>
-                            <td
+                            <template
                                 v-for="column in figureColumns"
                                 :key="column.key"
-                                :class="
-                                    cn(
-                                        'py-2 pr-4 text-right',
-                                        column.key === 'profit' &&
-                                            profitClass(day.profit),
-                                    )
-                                "
                             >
-                                <Price :nanodollars="day[column.key]" />
-                            </td>
+                                <td
+                                    :class="
+                                        cn(
+                                            'py-2 pr-4 text-right',
+                                            column.key === 'profit' &&
+                                                profitClass(day.profit),
+                                        )
+                                    "
+                                >
+                                    <Price :nanodollars="day[column.key]" />
+                                </td>
+                                <td
+                                    v-if="column.key === 'providerCost'"
+                                    class="py-2 pr-4 text-right"
+                                >
+                                    <PixelforgeCost :comparison="day" />
+                                </td>
+                            </template>
                         </tr>
                     </tbody>
                     <tfoot>
-                        <tr class="border-t-2 font-medium">
+                        <tr
+                            :class="
+                                cn(
+                                    'border-t-2 font-medium',
+                                    mismatchClass(totals),
+                                )
+                            "
+                        >
                             <td class="py-2 pr-4">Total</td>
                             <td class="py-2 pr-4 text-right tabular-nums">
                                 {{ totals.generations }}
                             </td>
-                            <td
+                            <template
                                 v-for="column in figureColumns"
                                 :key="column.key"
-                                :class="
-                                    cn(
-                                        'py-2 pr-4 text-right',
-                                        column.key === 'profit' &&
-                                            profitClass(totals.profit),
-                                    )
-                                "
                             >
-                                <Price :nanodollars="totals[column.key]" />
-                            </td>
+                                <td
+                                    :class="
+                                        cn(
+                                            'py-2 pr-4 text-right',
+                                            column.key === 'profit' &&
+                                                profitClass(totals.profit),
+                                        )
+                                    "
+                                >
+                                    <Price :nanodollars="totals[column.key]" />
+                                </td>
+                                <td
+                                    v-if="column.key === 'providerCost'"
+                                    class="py-2 pr-4 text-right"
+                                >
+                                    <PixelforgeCost :comparison="totals" />
+                                </td>
+                            </template>
                         </tr>
                     </tfoot>
                 </table>

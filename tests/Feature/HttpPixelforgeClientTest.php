@@ -10,6 +10,7 @@ use App\Pixelforge\PixelforgeError;
 use App\Pixelforge\PixelforgeUnreachable;
 use App\Pixelforge\UnexpectedPixelforgeResponse;
 use App\Pricing\Rates;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\Client\Factory;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
@@ -56,6 +57,29 @@ function generationObject(array $overrides = []): array
         'started_at' => null,
         'completed_at' => null,
     ], $overrides);
+}
+
+/**
+ * A Pixelforge usage object for 2026-11-01 to 2026-11-02, shaped like the docs'
+ * example but with a cost a float would lose.
+ *
+ * @return array<string, mixed>
+ */
+function usageObject(string|float $firstDayCost = '0.169080001'): array
+{
+    $tokens = ['input_text_tokens' => 41, 'input_image_tokens' => 0, 'output_tokens' => 3300, 'reasoning_tokens' => 2950];
+    $none = ['input_text_tokens' => 0, 'input_image_tokens' => 0, 'output_tokens' => 0, 'reasoning_tokens' => 0];
+
+    return [
+        'object' => 'usage',
+        'start_date' => '2026-11-01',
+        'end_date' => '2026-11-02',
+        'data' => [
+            ['date' => '2026-11-01', 'generations' => 3, ...$tokens, 'cost_usd' => $firstDayCost],
+            ['date' => '2026-11-02', 'generations' => 0, ...$none, 'cost_usd' => '0.000000000'],
+        ],
+        'total' => ['generations' => 3, ...$tokens, 'cost_usd' => $firstDayCost],
+    ];
 }
 
 /**
@@ -140,6 +164,20 @@ it('reads the current rates from GET /v1/pricing', function () {
     expect($rates)->toEqual(Rates::fromPixelforge(['input_text_tokens' => '5.00', 'input_image_tokens' => '10.00', 'output_tokens' => '40.00', 'reasoning_tokens' => '12.50']));
 });
 
+it('reads what Pixelforge billed per UTC day from GET /v1/usage, exactly', function () {
+    Http::fake(['pixelforge.test/v1/usage*' => Http::response(usageObject())]);
+
+    $billed = httpPixelforge()->billedCosts(CarbonImmutable::parse('2026-11-01'), CarbonImmutable::parse('2026-11-02'));
+
+    Http::assertSent(fn (Request $request) => $request->method() === 'GET'
+        && $request->url() === 'https://pixelforge.test/v1/usage?start_date=2026-11-01&end_date=2026-11-02'
+        && $request->hasHeader('Authorization', 'Bearer pf_test_key'));
+    expect($billed->on('2026-11-01')?->nanodollars())->toBe(169_080_001)
+        ->and($billed->on('2026-11-02')?->nanodollars())->toBe(0)
+        ->and($billed->on('2026-11-03'))->toBeNull()
+        ->and($billed->total->nanodollars())->toBe(169_080_001);
+});
+
 it('downloads an image from its signed URL as is, without the API key', function () {
     Http::fake(['images.pixelforge.test/lighthouse.png*' => Http::response("\x89PNG\r\n\x1a\nlighthouse", 200, ['Content-Type' => 'image/png'])]);
 
@@ -178,6 +216,7 @@ it('names an error without a body by its HTTP status', function (Closure $call) 
     'create' => [fn (HttpPixelforgeClient $pixelforge) => createLighthouse($pixelforge)],
     'retrieve' => [fn (HttpPixelforgeClient $pixelforge) => $pixelforge->retrieveGeneration('gen_01JC2Z8Q4N6V0M3H7X5T9R2B1K')],
     'rates' => [fn (HttpPixelforgeClient $pixelforge) => $pixelforge->rates()],
+    'billed costs' => [fn (HttpPixelforgeClient $pixelforge) => $pixelforge->billedCosts(CarbonImmutable::parse('2026-11-01'), CarbonImmutable::parse('2026-11-02'))],
     'image download' => [fn (HttpPixelforgeClient $pixelforge) => $pixelforge->downloadImage('https://pixelforge.test/images/lighthouse.png')],
 ]);
 
@@ -189,6 +228,7 @@ it('throws PixelforgeUnreachable when no response comes back', function (Closure
     'create' => [fn (HttpPixelforgeClient $pixelforge) => createLighthouse($pixelforge)],
     'retrieve' => [fn (HttpPixelforgeClient $pixelforge) => $pixelforge->retrieveGeneration('gen_01JC2Z8Q4N6V0M3H7X5T9R2B1K')],
     'rates' => [fn (HttpPixelforgeClient $pixelforge) => $pixelforge->rates()],
+    'billed costs' => [fn (HttpPixelforgeClient $pixelforge) => $pixelforge->billedCosts(CarbonImmutable::parse('2026-11-01'), CarbonImmutable::parse('2026-11-02'))],
     'image download' => [fn (HttpPixelforgeClient $pixelforge) => $pixelforge->downloadImage('https://pixelforge.test/images/lighthouse.png')],
 ]);
 
@@ -211,6 +251,16 @@ it('throws UnexpectedPixelforgeResponse for a success body it can\'t read', func
         'pixelforge.test/v1/pricing',
         ['object' => 'pricing'],
         fn (HttpPixelforgeClient $pixelforge) => $pixelforge->rates(),
+    ],
+    'usage without a total' => [
+        'pixelforge.test/v1/usage*',
+        ['object' => 'usage', 'data' => usageObject()['data']],
+        fn (HttpPixelforgeClient $pixelforge) => $pixelforge->billedCosts(CarbonImmutable::parse('2026-11-01'), CarbonImmutable::parse('2026-11-02')),
+    ],
+    'usage with a rounded cost' => [
+        'pixelforge.test/v1/usage*',
+        usageObject(firstDayCost: 0.16908),
+        fn (HttpPixelforgeClient $pixelforge) => $pixelforge->billedCosts(CarbonImmutable::parse('2026-11-01'), CarbonImmutable::parse('2026-11-02')),
     ],
 ]);
 

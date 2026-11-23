@@ -7,11 +7,25 @@ export type ReportFigures = {
     profit: number;
 };
 
-/** One UTC day of the admin report, from App\Reports\DailyRow. */
-export type ReportDay = ReportFigures & {
-    /** The UTC day, as YYYY-MM-DD. */
-    date: string;
+/**
+ * The Provider Cost set beside what Pixelforge billed, from App\Reports\CostComparison.
+ * Both are null when Pixelforge's usage couldn't be had (or doesn't cover the day).
+ */
+export type ReportCostComparison = {
+    pixelforgeCost: number | null;
+    /** What Pixelforge billed minus the Provider Cost; 0 when they match. */
+    costDifference: number | null;
 };
+
+/** One UTC day of the admin report, from App\Reports\DailyRow. */
+export type ReportDay = ReportFigures &
+    ReportCostComparison & {
+        /** The UTC day, as YYYY-MM-DD. */
+        date: string;
+    };
+
+/** The report's totals: the figures and the comparison with Pixelforge's total. */
+export type ReportTotals = ReportFigures & ReportCostComparison;
 
 /** One user's figures over the range, from App\Reports\UserRow. */
 export type ReportUser = ReportFigures & {
