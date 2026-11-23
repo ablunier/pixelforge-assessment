@@ -14,13 +14,13 @@ final readonly class DailyRow implements JsonSerializable
     public function __construct(
         /** The UTC day, as `Y-m-d`. */
         public string $date,
-        public Figures $figures,
-        public ?Money $pixelforgeCost = null,
+        public GenerationTotals $totals,
+        public ?Money $pixelforgeBilled = null,
     ) {}
 
     public function costComparison(): CostComparison
     {
-        return new CostComparison($this->figures->providerCost, $this->pixelforgeCost);
+        return new CostComparison($this->totals->providerCost, $this->pixelforgeBilled);
     }
 
     /**
@@ -28,6 +28,6 @@ final readonly class DailyRow implements JsonSerializable
      */
     public function jsonSerialize(): array
     {
-        return ['date' => $this->date, ...$this->figures->jsonSerialize(), ...$this->costComparison()->jsonSerialize()];
+        return ['date' => $this->date, ...$this->totals->jsonSerialize(), ...$this->costComparison()->jsonSerialize()];
     }
 }

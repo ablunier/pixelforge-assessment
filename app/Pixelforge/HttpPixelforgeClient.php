@@ -36,7 +36,7 @@ final readonly class HttpPixelforgeClient implements PixelforgeClient
         }
     }
 
-    public function billedCosts(CarbonImmutable $startDate, CarbonImmutable $endDate): BilledCosts
+    public function billed(CarbonImmutable $startDate, CarbonImmutable $endDate): PixelforgeBilled
     {
         $response = $this->send(fn (PendingRequest $request): Response => $request->get('usage', [
             'start_date' => $startDate->toDateString(),
@@ -48,7 +48,7 @@ final readonly class HttpPixelforgeClient implements PixelforgeClient
         }
 
         try {
-            return BilledCosts::fromPixelforge((array) $response->json());
+            return PixelforgeBilled::fromPixelforge((array) $response->json());
         } catch (InvalidArgumentException $exception) {
             throw UnexpectedPixelforgeResponse::because($exception);
         }

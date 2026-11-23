@@ -21,13 +21,13 @@ const difference = computed(() =>
 
 <template>
     <span
-        v-if="comparison.pixelforgeCost === null"
+        v-if="comparison.pixelforgeBilled === null"
         class="text-muted-foreground"
         title="Pixelforge's figure isn't available"
         >—</span
     >
     <span v-else class="inline-flex flex-col items-end">
-        <Price :nanodollars="comparison.pixelforgeCost" />
+        <Price :nanodollars="comparison.pixelforgeBilled" />
         <span
             v-if="difference !== null && difference !== 0n"
             class="text-xs font-medium text-amber-700 tabular-nums dark:text-amber-400"

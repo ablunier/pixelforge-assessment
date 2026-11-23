@@ -13,7 +13,7 @@ final readonly class CostComparison implements JsonSerializable
 {
     public function __construct(
         public Money $providerCost,
-        public ?Money $pixelforgeCost,
+        public ?Money $pixelforgeBilled,
     ) {}
 
     /**
@@ -22,18 +22,18 @@ final readonly class CostComparison implements JsonSerializable
      */
     public function difference(): ?Money
     {
-        return $this->pixelforgeCost?->minus($this->providerCost);
+        return $this->pixelforgeBilled?->minus($this->providerCost);
     }
 
     /**
      * Amounts in integer nanodollars, null when Pixelforge's figure isn't known.
      *
-     * @return array{pixelforgeCost: int|null, costDifference: int|null}
+     * @return array{pixelforgeBilled: int|null, costDifference: int|null}
      */
     public function jsonSerialize(): array
     {
         return [
-            'pixelforgeCost' => $this->pixelforgeCost?->nanodollars(),
+            'pixelforgeBilled' => $this->pixelforgeBilled?->nanodollars(),
             'costDifference' => $this->difference()?->nanodollars(),
         ];
     }

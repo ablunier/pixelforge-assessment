@@ -47,7 +47,7 @@ interface PixelforgeClient
      * @throws PixelforgeUnreachable when Pixelforge can't be reached
      * @throws UnexpectedPixelforgeResponse when a success response isn't usable usage
      */
-    public function billedCosts(CarbonImmutable $startDate, CarbonImmutable $endDate): BilledCosts;
+    public function billed(CarbonImmutable $startDate, CarbonImmutable $endDate): PixelforgeBilled;
 
     /**
      * POST /v1/generations. The local Generation id is sent as the

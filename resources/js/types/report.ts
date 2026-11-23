@@ -1,5 +1,5 @@
-/** The admin report's figures, from App\Reports\Figures. Amounts are integer nanodollars. */
-export type ReportFigures = {
+/** The admin report's figures, from App\Reports\GenerationTotals. Amounts are integer nanodollars. */
+export type GenerationTotals = {
     generations: number;
     charges: number;
     providerCost: number;
@@ -12,23 +12,23 @@ export type ReportFigures = {
  * Both are null when Pixelforge's usage couldn't be had (or doesn't cover the day).
  */
 export type ReportCostComparison = {
-    pixelforgeCost: number | null;
+    pixelforgeBilled: number | null;
     /** What Pixelforge billed minus the Provider Cost; 0 when they match. */
     costDifference: number | null;
 };
 
 /** One UTC day of the admin report, from App\Reports\DailyRow. */
-export type ReportDay = ReportFigures &
+export type ReportDay = GenerationTotals &
     ReportCostComparison & {
         /** The UTC day, as YYYY-MM-DD. */
         date: string;
     };
 
 /** The report's totals: the figures and the comparison with Pixelforge's total. */
-export type ReportTotals = ReportFigures & ReportCostComparison;
+export type ReportTotals = GenerationTotals & ReportCostComparison;
 
 /** One user's figures over the range, from App\Reports\UserRow. */
-export type ReportUser = ReportFigures & {
+export type ReportUser = GenerationTotals & {
     userId: number;
     name: string;
     email: string;

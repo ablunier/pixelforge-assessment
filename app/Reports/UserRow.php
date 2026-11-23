@@ -12,7 +12,7 @@ final readonly class UserRow implements JsonSerializable
 {
     public function __construct(
         public User $user,
-        public Figures $figures,
+        public GenerationTotals $totals,
     ) {}
 
     /**
@@ -24,7 +24,7 @@ final readonly class UserRow implements JsonSerializable
             'userId' => $this->user->id,
             'name' => $this->user->name,
             'email' => $this->user->email,
-            ...$this->figures->jsonSerialize(),
+            ...$this->totals->jsonSerialize(),
         ];
     }
 }

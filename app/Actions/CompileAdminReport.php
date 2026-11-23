@@ -7,7 +7,7 @@ use App\Enums\LedgerEntryKind;
 use App\Models\Generation;
 use App\Models\User;
 use App\Money\Money;
-use App\Pixelforge\BilledCosts;
+use App\Pixelforge\PixelforgeBilled;
 use App\Pixelforge\PixelforgeClient;
 use App\Pixelforge\PixelforgeError;
 use App\Pixelforge\PixelforgeUnreachable;
@@ -15,7 +15,7 @@ use App\Pixelforge\UnexpectedPixelforgeResponse;
 use App\Reports\AdminReport;
 use App\Reports\DailyRow;
 use App\Reports\DateRange;
-use App\Reports\Figures;
+use App\Reports\GenerationTotals;
 use App\Reports\UserRow;
 use Illuminate\Database\Query\JoinClause;
 use Illuminate\Support\Collection;
@@ -35,19 +35,19 @@ class CompileAdminReport
 
     public function handle(DateRange $range): AdminReport
     {
-        $buckets = $this->figuresByDayAndUser($range);
+        $buckets = $this->totalsByDayAndUser($range);
 
         $byDay = [];
         $byUser = [];
-        foreach ($buckets as ['day' => $day, 'userId' => $userId, 'figures' => $figures]) {
-            $byDay[$day] = ($byDay[$day] ?? Figures::none())->plus($figures);
-            $byUser[$userId] = ($byUser[$userId] ?? Figures::none())->plus($figures);
+        foreach ($buckets as ['day' => $day, 'userId' => $userId, 'totals' => $totals]) {
+            $byDay[$day] = ($byDay[$day] ?? GenerationTotals::none())->plus($totals);
+            $byUser[$userId] = ($byUser[$userId] ?? GenerationTotals::none())->plus($totals);
         }
 
-        $billed = $this->billedCosts($range);
+        $billed = $this->billed($range);
 
         $days = array_map(
-            fn (string $date): DailyRow => new DailyRow($date, $byDay[$date] ?? Figures::none(), $billed?->on($date)),
+            fn (string $date): DailyRow => new DailyRow($date, $byDay[$date] ?? GenerationTotals::none(), $billed?->on($date)),
             $range->dates(),
         );
 
@@ -58,10 +58,10 @@ class CompileAdminReport
      * What Pixelforge billed over the range, or null when it can't be had
      * (rate limited, overloaded, our API key refused, unreachable or unreadable).
      */
-    private function billedCosts(DateRange $range): ?BilledCosts
+    private function billed(DateRange $range): ?PixelforgeBilled
     {
         try {
-            return $this->pixelforge->billedCosts($range->from, $range->to);
+            return $this->pixelforge->billed($range->from, $range->to);
         } catch (PixelforgeError|PixelforgeUnreachable|UnexpectedPixelforgeResponse $failure) {
             report($failure);
 
@@ -74,9 +74,9 @@ class CompileAdminReport
      * The ledger allows at most one Charge per Generation, so the join never
      * counts a Generation twice.
      *
-     * @return Collection<int, array{day: string, userId: int, figures: Figures}>
+     * @return Collection<int, array{day: string, userId: int, totals: GenerationTotals}>
      */
-    private function figuresByDayAndUser(DateRange $range): Collection
+    private function totalsByDayAndUser(DateRange $range): Collection
     {
         return Generation::query()
             ->toBase()
@@ -97,7 +97,7 @@ class CompileAdminReport
             ->map(fn (object $row): array => [
                 'day' => (string) $row->day,
                 'userId' => (int) $row->user_id,
-                'figures' => new Figures(
+                'totals' => new GenerationTotals(
                     (int) $row->generations,
                     Money::ofNanodollars((int) $row->charges),
                     Money::ofNanodollars((int) $row->provider_cost),
@@ -109,7 +109,7 @@ class CompileAdminReport
      * The users with activity, biggest spenders first, including those who
      * have since deleted their account.
      *
-     * @param  array<int, Figures>  $byUser
+     * @param  array<int, GenerationTotals>  $byUser
      * @return list<UserRow>
      */
     private function userRows(array $byUser): array
@@ -117,13 +117,13 @@ class CompileAdminReport
         $users = User::withTrashed()->whereKey(array_keys($byUser))->get()->keyBy('id');
 
         $rows = array_map(
-            fn (int $userId, Figures $figures): UserRow => new UserRow($users[$userId], $figures),
+            fn (int $userId, GenerationTotals $totals): UserRow => new UserRow($users[$userId], $totals),
             array_keys($byUser),
             $byUser,
         );
 
-        usort($rows, fn (UserRow $a, UserRow $b): int => [$b->figures->charges->nanodollars(), $a->user->id]
-            <=> [$a->figures->charges->nanodollars(), $b->user->id]);
+        usort($rows, fn (UserRow $a, UserRow $b): int => [$b->totals->charges->nanodollars(), $a->user->id]
+            <=> [$a->totals->charges->nanodollars(), $b->user->id]);
 
         return $rows;
     }

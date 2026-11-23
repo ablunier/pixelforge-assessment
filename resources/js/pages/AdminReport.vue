@@ -3,7 +3,7 @@ import { Head, useForm } from '@inertiajs/vue3';
 import { CloudOff } from '@lucide/vue';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
-import PixelforgeCost from '@/components/PixelforgeCost.vue';
+import PixelforgeBilled from '@/components/PixelforgeBilled.vue';
 import Price from '@/components/Price.vue';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -14,7 +14,7 @@ import { report } from '@/routes/admin';
 import type {
     ReportCostComparison,
     ReportDay,
-    ReportFigures,
+    GenerationTotals,
     ReportRange,
     ReportTotals,
     ReportUser,
@@ -51,7 +51,7 @@ function showRange(): void {
     form.submit({ preserveScroll: true });
 }
 
-const figureColumns: { key: keyof ReportFigures; label: string }[] = [
+const totalsColumns: { key: keyof GenerationTotals; label: string }[] = [
     { key: 'charges', label: 'Charges' },
     { key: 'providerCost', label: 'Provider Cost' },
     { key: 'profit', label: 'Profit' },
@@ -129,7 +129,7 @@ function mismatchClass({ costDifference }: ReportCostComparison): string {
                                 Generations
                             </th>
                             <template
-                                v-for="column in figureColumns"
+                                v-for="column in totalsColumns"
                                 :key="column.key"
                             >
                                 <th class="py-2 pr-4 text-right font-medium">
@@ -157,7 +157,7 @@ function mismatchClass({ costDifference }: ReportCostComparison): string {
                                 {{ day.generations }}
                             </td>
                             <template
-                                v-for="column in figureColumns"
+                                v-for="column in totalsColumns"
                                 :key="column.key"
                             >
                                 <td
@@ -175,7 +175,7 @@ function mismatchClass({ costDifference }: ReportCostComparison): string {
                                     v-if="column.key === 'providerCost'"
                                     class="py-2 pr-4 text-right"
                                 >
-                                    <PixelforgeCost :comparison="day" />
+                                    <PixelforgeBilled :comparison="day" />
                                 </td>
                             </template>
                         </tr>
@@ -194,7 +194,7 @@ function mismatchClass({ costDifference }: ReportCostComparison): string {
                                 {{ totals.generations }}
                             </td>
                             <template
-                                v-for="column in figureColumns"
+                                v-for="column in totalsColumns"
                                 :key="column.key"
                             >
                                 <td
@@ -212,7 +212,7 @@ function mismatchClass({ costDifference }: ReportCostComparison): string {
                                     v-if="column.key === 'providerCost'"
                                     class="py-2 pr-4 text-right"
                                 >
-                                    <PixelforgeCost :comparison="totals" />
+                                    <PixelforgeBilled :comparison="totals" />
                                 </td>
                             </template>
                         </tr>
@@ -243,7 +243,7 @@ function mismatchClass({ costDifference }: ReportCostComparison): string {
                                 Generations
                             </th>
                             <th
-                                v-for="column in figureColumns"
+                                v-for="column in totalsColumns"
                                 :key="column.key"
                                 class="py-2 pr-4 text-right font-medium"
                             >
@@ -263,7 +263,7 @@ function mismatchClass({ costDifference }: ReportCostComparison): string {
                                 {{ user.generations }}
                             </td>
                             <td
-                                v-for="column in figureColumns"
+                                v-for="column in totalsColumns"
                                 :key="column.key"
                                 :class="
                                     cn(
@@ -284,7 +284,7 @@ function mismatchClass({ costDifference }: ReportCostComparison): string {
                                 {{ totals.generations }}
                             </td>
                             <td
-                                v-for="column in figureColumns"
+                                v-for="column in totalsColumns"
                                 :key="column.key"
                                 :class="
                                     cn(

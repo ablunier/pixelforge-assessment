@@ -10,7 +10,7 @@ use JsonSerializable;
  * What Pixelforge billed our API key, per UTC day and in total, as
  * GET /v1/usage reports it: the source of truth for our Provider Costs.
  */
-final readonly class BilledCosts implements JsonSerializable
+final readonly class PixelforgeBilled implements JsonSerializable
 {
     private const string DATE_PATTERN = '/^\d{4}-\d{2}-\d{2}$/';
 
