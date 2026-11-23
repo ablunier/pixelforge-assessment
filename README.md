@@ -86,7 +86,7 @@ Tests run against Postgres (the `testing` database, created by Sail) and never c
 ./vendor/bin/sail artisan test        # the Pest suite only
 ```
 
-The suite tests at the app's outer edge: Inertia requests, signed webhook POSTs built from Pixelforge's documented signing scheme, queued jobs and the reconciliation command, with Pixelforge faked at the HTTP client. Pricing also has its own unit tests. The checks against the real sandbox are manual, in [docs/sandbox-verification.md](docs/sandbox-verification.md).
+The suite tests at the app's outer edge: Inertia requests, signed webhook POSTs built from Pixelforge's documented signing scheme, queued jobs and the reconciliation command, with Pixelforge held in memory behind the `PixelforgeClient` seam. `HttpPixelforgeClient` has its own wire-contract tests against faked HTTP. Pricing also has its own unit tests. The checks against the real sandbox are manual, in [docs/sandbox-verification.md](docs/sandbox-verification.md).
 
 ## Architecture
 
