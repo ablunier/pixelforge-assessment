@@ -20,6 +20,10 @@ _Avoid_: state, phase
 A notification from Pixelforge that a Generation changed status. The same event may arrive more than once and in any order.
 _Avoid_: callback, notification, hook
 
+**Sandbox**:
+Pixelforge's test environment, where a keyword in the prompt (`[succeed]`, `[fail]`, `[slow]`, `[duplicate]`, `[blocked]`, `[overloaded]`) picks the Generation's outcome. Only the real Pixelforge environment, never a stand-in for it in tests.
+_Avoid_: test mode, fake Pixelforge
+
 ## Submission
 
 **Submission Attempt**:
