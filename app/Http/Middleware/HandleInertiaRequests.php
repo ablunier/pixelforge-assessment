@@ -43,6 +43,10 @@ class HandleInertiaRequests extends Middleware
             ],
             // The user's Balance in nanodollars, for the navigation.
             'balance' => fn (): ?int => $request->user()?->balance()->nanodollars(),
+            // What the signed-in user may do, for showing only the links they can follow.
+            'can' => [
+                'viewAdminReport' => $request->user()?->can('viewAdminReport') ?? false,
+            ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
         ];
     }

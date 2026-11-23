@@ -62,6 +62,16 @@ class UserFactory extends Factory
     }
 
     /**
+     * Indicate that the user is an admin, who can see the admin report.
+     */
+    public function admin(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'is_admin' => true,
+        ]);
+    }
+
+    /**
      * Indicate that the user has bought `$amount` of Credits (a $25 pack
      * unless told otherwise, enough for any test's Generations): one Top-up.
      */

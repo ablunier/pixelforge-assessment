@@ -4,3 +4,4 @@ export * from './ui';
 export * from './pricing';
 export * from './generation';
 export * from './credits';
+export * from './report';

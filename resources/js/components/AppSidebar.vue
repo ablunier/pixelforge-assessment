@@ -1,6 +1,13 @@
 <script setup lang="ts">
-import { Link } from '@inertiajs/vue3';
-import { BookOpen, Coins, FolderGit2, LayoutGrid } from '@lucide/vue';
+import { Link, usePage } from '@inertiajs/vue3';
+import {
+    BookOpen,
+    ChartColumn,
+    Coins,
+    FolderGit2,
+    LayoutGrid,
+} from '@lucide/vue';
+import { computed } from 'vue';
 import AppLogo from '@/components/AppLogo.vue';
 import NavBalance from '@/components/NavBalance.vue';
 import NavFooter from '@/components/NavFooter.vue';
@@ -16,10 +23,13 @@ import {
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
+import { report as adminReport } from '@/routes/admin';
 import { show as credits } from '@/routes/credits';
 import type { NavItem } from '@/types';
 
-const mainNavItems: NavItem[] = [
+const page = usePage();
+
+const mainNavItems = computed<NavItem[]>(() => [
     {
         title: 'Dashboard',
         href: dashboard(),
@@ -30,7 +40,10 @@ const mainNavItems: NavItem[] = [
         href: credits(),
         icon: Coins,
     },
-];
+    ...(page.props.can.viewAdminReport
+        ? [{ title: 'Admin report', href: adminReport(), icon: ChartColumn }]
+        : []),
+]);
 
 const footerNavItems: NavItem[] = [
     {

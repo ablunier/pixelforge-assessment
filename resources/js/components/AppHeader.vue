@@ -1,6 +1,14 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
-import { BookOpen, Coins, Folder, LayoutGrid, Menu, Search } from '@lucide/vue';
+import {
+    BookOpen,
+    ChartColumn,
+    Coins,
+    Folder,
+    LayoutGrid,
+    Menu,
+    Search,
+} from '@lucide/vue';
 import { computed } from 'vue';
 import AppLogo from '@/components/AppLogo.vue';
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
@@ -37,6 +45,7 @@ import { useCurrentUrl } from '@/composables/useCurrentUrl';
 import { getInitials } from '@/composables/useInitials';
 import { toUrl } from '@/lib/utils';
 import { dashboard } from '@/routes';
+import { report as adminReport } from '@/routes/admin';
 import { show as credits } from '@/routes/credits';
 import type { BreadcrumbItem, NavItem } from '@/types';
 
@@ -55,7 +64,7 @@ const { isCurrentUrl, whenCurrentUrl } = useCurrentUrl();
 const activeItemStyles =
     'text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100';
 
-const mainNavItems: NavItem[] = [
+const mainNavItems = computed<NavItem[]>(() => [
     {
         title: 'Dashboard',
         href: dashboard(),
@@ -66,7 +75,10 @@ const mainNavItems: NavItem[] = [
         href: credits(),
         icon: Coins,
     },
-];
+    ...(page.props.can.viewAdminReport
+        ? [{ title: 'Admin report', href: adminReport(), icon: ChartColumn }]
+        : []),
+]);
 
 const rightNavItems: NavItem[] = [
     {
