@@ -21,7 +21,7 @@ defineProps<{
 </script>
 
 <template>
-    <li class="flex gap-4 py-3">
+    <li :id="`generation-${generation.id}`" class="flex scroll-mt-4 gap-4 py-3">
         <div
             class="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted text-muted-foreground"
         >

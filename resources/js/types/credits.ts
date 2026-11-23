@@ -15,6 +15,7 @@ export type LedgerEntry = {
     kind: LedgerEntryKind;
     /** Integer nanodollars, always positive: the kind says which way it moves. */
     amount: number;
-    generationId: string | null;
+    /** The Generation a Hold, Hold release or Charge belongs to; null for a Top-up. */
+    generation: { id: string; prompt: string } | null;
     createdAt: string;
 };

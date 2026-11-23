@@ -18,9 +18,10 @@ use Inertia\Response;
 class DashboardController extends Controller
 {
     /**
-     * The main page: the generate form, priced live from the current rates,
-     * above the user's Generations, newest first. The history polls this page
-     * for `generations` and `pollHistory` only, so the pricing props are lazy
+     * The main page: the generate form, priced live from the current rates
+     * beside the user's Available Balance, above the user's Generations,
+     * newest first. The history polls this page for `generations`,
+     * `pollHistory` and the balances only, so the pricing props are lazy
      * and a poll never asks Pixelforge for rates. When no rates can be had,
      * the pricing props are null and the history still shows.
      */
@@ -55,6 +56,9 @@ class DashboardController extends Controller
             'generations' => fn (): array => GenerationResource::collection(
                 $user->generations()->history()->get(),
             )->resolve($request),
+            // In nanodollars, beside the generate button. The history polls it
+            // too, so released Holds show up without a reload.
+            'availableBalance' => fn (): int => $user->availableBalance()->nanodollars(),
             // The history polls for status updates only while this is true.
             'pollHistory' => fn (): bool => $user->generations()->notFinal()->exists(),
         ]);
