@@ -100,3 +100,30 @@ it('is unavailable when no rates have ever been quoted', function (PixelforgeErr
 
     expect(fn () => $client->rates())->toThrow(PricingUnavailable::class);
 })->with('rates that can\'t be quoted');
+
+it('asks Pixelforge again when the cached rates aren\'t in the shape it caches', function (mixed $entry) {
+    cache()->put('pixelforge.rates-per-token', $entry, 3600);
+    $pixelforge = new InMemoryPixelforgeClient;
+    $pixelforge->answerRates(quotedRates());
+
+    expect(cachingClientOver($pixelforge)->rates())->toEqual(quotedRates())
+        ->and($pixelforge->rateRequests())->toBe(1);
+})->with('cache entries in the wrong shape');
+
+it('is unavailable rather than failing when the last rates quoted aren\'t in the shape it caches', function (mixed $entry) {
+    cache()->forever('pixelforge.rates-per-token.last-known', $entry);
+    $pixelforge = new InMemoryPixelforgeClient;
+    $pixelforge->answerRates(NoAnswer::Unreachable);
+
+    expect(fn () => cachingClientOver($pixelforge)->rates())->toThrow(PricingUnavailable::class);
+})->with('cache entries in the wrong shape');
+
+/**
+ * @return array<string, array{mixed}>
+ */
+dataset('cache entries in the wrong shape', fn () => [
+    'a missing rate' => [array_diff_key(quotedRates()->jsonSerialize(), ['reasoning_tokens' => true])],
+    'an extra rate' => [[...quotedRates()->jsonSerialize(), 'audio_tokens' => 1]],
+    'a rate that isn\'t integer nanodollars' => [[...quotedRates()->jsonSerialize(), 'output_tokens' => '40.00']],
+    'not an array' => ['40.00'],
+]);

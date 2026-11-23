@@ -14,7 +14,10 @@ use Illuminate\Contracts\Cache\Repository as Cache;
  */
 final readonly class CachingPixelforgeClient implements PixelforgeClient
 {
-    /** Rates are cached as nanodollars per token, as Rates::jsonSerialize() gives them. */
+    /**
+     * Rates are cached as nanodollars per token, as Rates::jsonSerialize() gives
+     * them. An entry in any other shape counts as a miss.
+     */
     private const string RATES_CACHE_KEY = 'pixelforge.rates-per-token';
 
     private const int RATES_CACHE_SECONDS = 3600;
@@ -75,7 +78,7 @@ final readonly class CachingPixelforgeClient implements PixelforgeClient
 
     private static function cachedRates(mixed $perToken): ?Rates
     {
-        return is_array($perToken) ? Rates::fromNanodollarsPerToken($perToken) : null;
+        return Rates::tryFromNanodollarsPerToken($perToken);
     }
 
     public function createGeneration(string $generationId, string $prompt, Size $size, Quality $quality, array $referenceImages): GenerationSnapshot

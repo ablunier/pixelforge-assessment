@@ -38,17 +38,26 @@ final readonly class Rates implements JsonSerializable
     }
 
     /**
-     * Rebuild from jsonSerialize()'s integer nanodollars per token.
-     *
-     * @param  array<string, mixed>  $perToken
+     * Rebuild from jsonSerialize()'s integer nanodollars per token, or null
+     * when the value isn't exactly that shape (say, one stored before the
+     * shape changed).
      */
-    public static function fromNanodollarsPerToken(array $perToken): self
+    public static function tryFromNanodollarsPerToken(mixed $perToken): ?self
     {
+        $keys = ['input_text_tokens', 'input_image_tokens', 'output_tokens', 'reasoning_tokens'];
+
+        if (! is_array($perToken)
+            || array_diff($keys, array_keys($perToken)) !== []
+            || count($perToken) !== count($keys)
+            || array_filter($perToken, is_int(...)) !== $perToken) {
+            return null;
+        }
+
         return new self(
-            Money::ofNanodollars((int) $perToken['input_text_tokens']),
-            Money::ofNanodollars((int) $perToken['input_image_tokens']),
-            Money::ofNanodollars((int) $perToken['output_tokens']),
-            Money::ofNanodollars((int) $perToken['reasoning_tokens']),
+            Money::ofNanodollars($perToken['input_text_tokens']),
+            Money::ofNanodollars($perToken['input_image_tokens']),
+            Money::ofNanodollars($perToken['output_tokens']),
+            Money::ofNanodollars($perToken['reasoning_tokens']),
         );
     }
 
