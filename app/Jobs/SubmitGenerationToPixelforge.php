@@ -8,13 +8,13 @@ use App\Models\Generation;
 use App\Pixelforge\Answer;
 use App\Pixelforge\PixelforgeClient;
 use App\Pixelforge\PixelforgeError;
+use App\Pixelforge\PixelforgeUnreachable;
 use App\Pixelforge\Refusal;
 use App\Pixelforge\RetryIn;
 use App\Pixelforge\UnexpectedPixelforgeResponse;
 use Illuminate\Contracts\Queue\ShouldBeUniqueUntilProcessing;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
-use Illuminate\Http\Client\ConnectionException;
 use Throwable;
 
 /**
@@ -83,7 +83,7 @@ class SubmitGenerationToPixelforge implements ShouldBeUniqueUntilProcessing, Sho
             }
 
             return Answer::refused($error->refusal(), $error->errorCode, $error->getMessage(), $error->retryAfter);
-        } catch (ConnectionException|UnexpectedPixelforgeResponse $exception) {
+        } catch (PixelforgeUnreachable|UnexpectedPixelforgeResponse $exception) {
             // The response was lost, or Pixelforge accepted the request (and may bill it)
             // in a body this app can't read: it may or may not have the Generation, and
             // resending with the same Idempotency-Key is safe either way.

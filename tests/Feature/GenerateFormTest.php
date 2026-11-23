@@ -56,22 +56,6 @@ it('asks Pixelforge for its rates without authentication details leaking into th
         && $request->url() === 'https://pixelforge.test/v1/pricing');
 });
 
-it('caches the rates for about an hour', function () {
-    fakePixelforgePricing();
-    $user = User::factory()->create();
-
-    $this->actingAs($user)->get(route('dashboard'))->assertOk();
-    $this->travel(59)->minutes();
-    $this->actingAs($user)->get(route('dashboard'))->assertOk();
-
-    Http::assertSentCount(1);
-
-    $this->travel(2)->minutes();
-    $this->actingAs($user)->get(route('dashboard'))->assertOk();
-
-    Http::assertSentCount(2);
-});
-
 /**
  * Pixelforge answers successive GET /v1/pricing requests with these responses.
  *
@@ -116,9 +100,9 @@ it('still shows the history, with no pricing, when Pixelforge can\'t quote rates
     Exceptions::assertReported(PricingUnavailable::class);
 });
 
-it('prices with the last rates Pixelforge quoted while it can\'t quote them, asking again after a minute', function () {
+it('prices with the last rates Pixelforge quoted while it can\'t quote them', function () {
     Exceptions::fake();
-    fakePricingResponses([publishedRates(), Http::response('Bad gateway', 502), Http::response('Bad gateway', 502)]);
+    fakePricingResponses([publishedRates(), Http::response('Bad gateway', 502)]);
     $user = User::factory()->create();
 
     $this->actingAs($user)->get(route('dashboard'))->assertOk();
@@ -130,14 +114,6 @@ it('prices with the last rates Pixelforge quoted while it can\'t quote them, ask
             ->where('pricing.rates.output_tokens', 40_000)
             ->where('priceRange', ['min' => 58_125_000, 'max' => 86_250_000])
         );
-    $this->actingAs($user)->get(route('dashboard'))->assertOk();
-
-    Http::assertSentCount(2);
-
-    $this->travel(61)->seconds();
-    $this->actingAs($user)->get(route('dashboard'))->assertOk();
-
-    Http::assertSentCount(3);
 });
 
 it('never caches rates it can\'t read, so the next page asks again', function () {

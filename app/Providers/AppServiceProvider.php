@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Pixelforge\CachingPixelforgeClient;
 use App\Pixelforge\HttpPixelforgeClient;
 use App\Pixelforge\PixelforgeClient;
 use Carbon\CarbonImmutable;
@@ -27,11 +28,13 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->app->bind(PixelforgeClient::class, fn (Application $app): PixelforgeClient => new HttpPixelforgeClient(
-            $app->make(HttpFactory::class),
+        $this->app->bind(PixelforgeClient::class, fn (Application $app): PixelforgeClient => new CachingPixelforgeClient(
+            new HttpPixelforgeClient(
+                $app->make(HttpFactory::class),
+                (string) config('services.pixelforge.base_url'),
+                config('services.pixelforge.api_key'),
+            ),
             $app->make(Cache::class),
-            (string) config('services.pixelforge.base_url'),
-            config('services.pixelforge.api_key'),
         ));
     }
 
