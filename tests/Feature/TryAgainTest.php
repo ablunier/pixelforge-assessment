@@ -6,16 +6,19 @@ use App\Enums\Size;
 use App\Jobs\SubmitGenerationToPixelforge;
 use App\Models\Generation;
 use App\Models\User;
+use App\Pixelforge\PricingUnavailable;
+use Illuminate\Support\Facades\Exceptions;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia as Assert;
 
 beforeEach(function () {
     config(['services.pixelforge.base_url' => 'https://pixelforge.test/v1']);
     Queue::fake();
-    fakePixelforgePricing();
 });
 
 it('creates a new pending Generation with the same parameters when trying a failed Generation again', function () {
+    fakePixelforgePricing();
     $user = User::factory()->create();
     $failed = Generation::factory()->for($user)->failed()->create([
         'prompt' => 'A lighthouse on a cliff at dawn, oil painting',
@@ -41,7 +44,7 @@ it('creates a new pending Generation with the same parameters when trying a fail
         ->and($retry->quality)->toBe(Quality::High)
         ->and($retry->reference_images)->toBe(['https://example.com/style.png'])
         // Same Maximum Price as a fresh submission of these parameters.
-        ->and($retry->max_price->nanodollars())->toBe(457_150_000)
+        ->and($retry->max_price)->toEqual($failed->parameters()->maximumPrice(pixelforgeRates()))
         ->and($failed->fresh()->getAttributes())->toBe($failedBefore);
 
     Queue::assertPushed(SubmitGenerationToPixelforge::class, fn (SubmitGenerationToPixelforge $job) => $job->generation->is($retry));
@@ -52,6 +55,21 @@ it('creates a new pending Generation with the same parameters when trying a fail
             ->where('generations.0.status', 'pending')
             ->where('generations.1.id', $failed->id)
         );
+});
+
+it('creates nothing and says why when there are no rates to price the new Generation with', function () {
+    Exceptions::fake();
+    Http::fake(['*/v1/pricing' => Http::failedConnection()]);
+    $user = User::factory()->create();
+    $failed = Generation::factory()->for($user)->failed()->create();
+
+    $this->actingAs($user)
+        ->post(route('generations.try-again', $failed))
+        ->assertSessionHasErrors(['generate' => "Prices can't be loaded right now, so nothing was submitted. Try again in a minute."]);
+
+    expect(Generation::count())->toBe(1);
+    Queue::assertNothingPushed();
+    Exceptions::assertReported(PricingUnavailable::class);
 });
 
 it('rejects trying again a Generation that isn\'t failed', function (string $state) {
