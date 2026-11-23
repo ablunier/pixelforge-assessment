@@ -3,6 +3,7 @@
 namespace App\Pixelforge;
 
 use App\Money\Money;
+use Carbon\CarbonImmutable;
 use InvalidArgumentException;
 use JsonSerializable;
 
@@ -10,7 +11,7 @@ use JsonSerializable;
  * What Pixelforge billed our API key, per UTC day and in total, as
  * GET /v1/usage reports it: the source of truth for our Provider Costs.
  */
-final readonly class BilledCosts implements JsonSerializable
+final readonly class PixelforgeBilled implements JsonSerializable
 {
     private const string DATE_PATTERN = '/^\d{4}-\d{2}-\d{2}$/';
 
@@ -73,12 +74,12 @@ final readonly class BilledCosts implements JsonSerializable
     }
 
     /**
-     * What Pixelforge billed on UTC day `$date` (`Y-m-d`), or null when its
-     * report doesn't cover that day.
+     * What Pixelforge billed on the UTC day `$day` falls on. A day its report
+     * leaves out counts as nothing billed.
      */
-    public function on(string $date): ?Money
+    public function on(CarbonImmutable $day): Money
     {
-        return $this->byDate[$date] ?? null;
+        return $this->byDate[$day->utc()->toDateString()] ?? Money::zero();
     }
 
     /**

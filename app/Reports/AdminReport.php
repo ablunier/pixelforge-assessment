@@ -2,7 +2,7 @@
 
 namespace App\Reports;
 
-use App\Pixelforge\BilledCosts;
+use App\Pixelforge\PixelforgeBilled;
 
 /**
  * The admin report for a date range: one row per UTC day, one per user with
@@ -19,20 +19,20 @@ final readonly class AdminReport
         public array $days,
         public array $users,
         /** What Pixelforge billed over the range, or null when it couldn't be had. */
-        public ?BilledCosts $billed,
+        public ?PixelforgeBilled $billed,
     ) {}
 
-    public function totals(): Figures
+    /**
+     * The totals over every day, beside the total Pixelforge billed.
+     */
+    public function totals(): ComparedTotals
     {
-        return array_reduce(
+        $totals = array_reduce(
             $this->days,
-            fn (Figures $total, DailyRow $day): Figures => $total->plus($day->figures),
-            Figures::none(),
+            fn (GenerationTotals $total, DailyRow $day): GenerationTotals => $total->plus($day->compared->totals),
+            GenerationTotals::none(),
         );
-    }
 
-    public function totalCostComparison(): CostComparison
-    {
-        return new CostComparison($this->totals()->providerCost, $this->billed?->total);
+        return new ComparedTotals($totals, $this->billed?->total);
     }
 }

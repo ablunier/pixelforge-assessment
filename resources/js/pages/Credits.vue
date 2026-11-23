@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, useForm, usePage } from '@inertiajs/vue3';
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { computed } from 'vue';
 import CreditsController from '@/actions/App/Http/Controllers/CreditsController';
 import Heading from '@/components/Heading.vue';
@@ -10,7 +10,12 @@ import { Button } from '@/components/ui/button';
 import { formatForDisplay } from '@/lib/money';
 import { dashboard } from '@/routes';
 import { show } from '@/routes/credits';
-import type { CreditPack, LedgerEntry, LedgerEntryKind } from '@/types';
+import type {
+    CreditPack,
+    LedgerEntry,
+    LedgerEntryKind,
+    LedgerPage,
+} from '@/types';
 
 defineOptions({
     layout: {
@@ -25,8 +30,9 @@ defineOptions({
 
 defineProps<{
     packs: CreditPack[];
-    /** The user's ledger entries, newest first. */
+    /** One page of the user's ledger entries, newest first. */
     ledgerEntries: LedgerEntry[];
+    ledgerPage: LedgerPage;
 }>();
 
 const page = usePage();
@@ -136,6 +142,46 @@ function formatDate(iso: string): string {
                     /></span>
                 </li>
             </ul>
+            <nav
+                v-if="ledgerPage.last > 1"
+                aria-label="History pages"
+                class="flex items-center justify-between pt-4 text-sm"
+            >
+                <Button
+                    v-if="ledgerPage.current > 1"
+                    variant="outline"
+                    size="sm"
+                    as-child
+                >
+                    <Link
+                        :href="
+                            show({ query: { page: ledgerPage.current - 1 } })
+                        "
+                        preserve-scroll
+                        >Newer</Link
+                    >
+                </Button>
+                <span v-else />
+                <span class="text-muted-foreground"
+                    >Page {{ ledgerPage.current }} of
+                    {{ ledgerPage.last }}</span
+                >
+                <Button
+                    v-if="ledgerPage.current < ledgerPage.last"
+                    variant="outline"
+                    size="sm"
+                    as-child
+                >
+                    <Link
+                        :href="
+                            show({ query: { page: ledgerPage.current + 1 } })
+                        "
+                        preserve-scroll
+                        >Older</Link
+                    >
+                </Button>
+                <span v-else />
+            </nav>
         </section>
     </div>
 </template>

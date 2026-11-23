@@ -65,3 +65,7 @@ it('divides exactly into whole nanodollars, or not at all', function () {
     expect(Money::fromDecimal('12.50')->dividedExactlyBy(1_000_000)?->nanodollars())->toBe(12_500)
         ->and(Money::fromDecimal('12.5000001')->dividedExactlyBy(1_000_000))->toBeNull();
 });
+
+it('has a zero amount', function () {
+    expect(Money::zero()->nanodollars())->toBe(0);
+});

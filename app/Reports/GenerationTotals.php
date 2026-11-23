@@ -9,7 +9,7 @@ use JsonSerializable;
  * The admin report's figures for some succeeded Generations: how many, the
  * sum of their Charges, the sum of their Provider Costs, and the Profit.
  */
-final readonly class Figures implements JsonSerializable
+final readonly class GenerationTotals implements JsonSerializable
 {
     public function __construct(
         public int $generations,
@@ -19,7 +19,7 @@ final readonly class Figures implements JsonSerializable
 
     public static function none(): self
     {
-        return new self(0, Money::ofNanodollars(0), Money::ofNanodollars(0));
+        return new self(0, Money::zero(), Money::zero());
     }
 
     /** Charges minus Provider Costs. */

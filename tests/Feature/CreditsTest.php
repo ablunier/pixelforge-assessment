@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\TopUp;
 use App\Models\Generation;
 use App\Models\User;
 use App\Money\Money;
@@ -84,6 +85,28 @@ it('lists the user\'s ledger entries newest first', function () {
             ->where('ledgerEntries.0.amount', 5_000_000_000)
             ->where('ledgerEntries.1.amount', 25_000_000_000)
             ->where('ledgerEntries.2.amount', 10_000_000_000));
+});
+
+it('pages the ledger history 50 entries at a time, newest first', function () {
+    $user = User::factory()->create();
+    // Top-ups of 1 to 51 nanodollars, the 51st the newest.
+    foreach (range(1, 51) as $nanodollars) {
+        app(TopUp::class)->handle($user, Money::ofNanodollars($nanodollars));
+    }
+    $this->actingAs($user);
+
+    $this->get(route('credits.show'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('ledgerEntries', 50)
+            ->where('ledgerEntries.0.amount', 51)
+            ->where('ledgerEntries.49.amount', 2)
+            ->where('ledgerPage', ['current' => 1, 'last' => 2]));
+
+    $this->get(route('credits.show', ['page' => 2]))
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('ledgerEntries', 1)
+            ->where('ledgerEntries.0.amount', 1)
+            ->where('ledgerPage', ['current' => 2, 'last' => 2]));
 });
 
 it('shows users only their own ledger and Balance', function () {

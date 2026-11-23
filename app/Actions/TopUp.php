@@ -14,9 +14,6 @@ class TopUp
 {
     public function handle(User $user, Money $amount): LedgerEntry
     {
-        return $user->ledgerEntries()->create([
-            'kind' => LedgerEntryKind::TopUp,
-            'amount' => $amount,
-        ]);
+        return LedgerEntry::record($user->id, LedgerEntryKind::TopUp, $amount);
     }
 }

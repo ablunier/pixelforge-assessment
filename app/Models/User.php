@@ -4,12 +4,14 @@ namespace App\Models;
 
 use App\Enums\LedgerEntryKind;
 use App\Money\Money;
+use Closure;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
@@ -30,6 +32,7 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property bool $is_admin
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
+ * @property Carbon|null $deleted_at
  * @property-read Collection<int, Generation> $generations
  * @property-read Collection<int, LedgerEntry> $ledgerEntries
  */
@@ -38,7 +41,7 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
 class User extends Authenticatable implements PasskeyUser
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable, PasskeyAuthenticatable, TwoFactorAuthenticatable;
+    use HasFactory, Notifiable, PasskeyAuthenticatable, SoftDeletes, TwoFactorAuthenticatable;
 
     /**
      * Not an admin unless made one, matching the column's default.
@@ -85,7 +88,7 @@ class User extends Authenticatable implements PasskeyUser
      */
     public function balance(): Money
     {
-        return $this->ledgerTotal(LedgerEntryKind::TopUp)->minus($this->ledgerTotal(LedgerEntryKind::Charge));
+        return self::balanceFrom($this->ledgerTotals());
     }
 
     /**
@@ -95,15 +98,35 @@ class User extends Authenticatable implements PasskeyUser
      */
     public function availableBalance(): Money
     {
-        $activeHolds = $this->ledgerTotal(LedgerEntryKind::Hold)
-            ->minus($this->ledgerTotal(LedgerEntryKind::Charge))
-            ->minus($this->ledgerTotal(LedgerEntryKind::HoldRelease));
+        $total = $this->ledgerTotals();
 
-        return $this->balance()->minus($activeHolds);
+        $activeHolds = $total(LedgerEntryKind::Hold)
+            ->minus($total(LedgerEntryKind::Charge))
+            ->minus($total(LedgerEntryKind::HoldRelease));
+
+        return self::balanceFrom($total)->minus($activeHolds);
     }
 
-    private function ledgerTotal(LedgerEntryKind $kind): Money
+    /**
+     * @param  Closure(LedgerEntryKind): Money  $total
+     */
+    private static function balanceFrom(Closure $total): Money
     {
-        return Money::ofNanodollars((int) $this->ledgerEntries()->where('kind', $kind)->sum('amount'));
+        return $total(LedgerEntryKind::TopUp)->minus($total(LedgerEntryKind::Charge));
+    }
+
+    /**
+     * The sum of this user's ledger entries of each kind, read in one query.
+     *
+     * @return Closure(LedgerEntryKind): Money
+     */
+    private function ledgerTotals(): Closure
+    {
+        $sums = $this->ledgerEntries()->toBase()
+            ->groupBy('kind')
+            ->selectRaw('kind, sum(amount) as total')
+            ->pluck('total', 'kind');
+
+        return fn (LedgerEntryKind $kind): Money => Money::ofNanodollars((int) $sums->get($kind->value, 0));
     }
 }

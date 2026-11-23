@@ -103,7 +103,7 @@ it('leaves the reviewer enough Credits after the examples to try every quality a
     createReviewer(['--examples' => true]);
 
     // One Generation of each quality and size, with the longest prompt and the most reference images.
-    $everyQualityAndSize = Money::ofNanodollars(0);
+    $everyQualityAndSize = Money::zero();
     foreach (Quality::cases() as $quality) {
         foreach (Size::cases() as $size) {
             $parameters = new GenerationParameters(
@@ -161,11 +161,12 @@ it('only submits the examples the reviewer is missing when run again', function 
     config(['reviewer.email' => 'reviewer@example.com', 'reviewer.password' => 'a-long-secret-password']);
     Queue::fake();
     createReviewer(['--examples' => true]);
-    Generation::query()->where('prompt', 'like', '%[slow]%')->delete();
+    // Generations are never deleted, so an example goes missing by its prompt changing.
+    Generation::query()->where('prompt', 'like', '%[slow]%')->update(['prompt' => 'A prompt that is no example']);
 
     createReviewer(['--examples' => true]);
 
-    expect(Generation::query()->count())->toBe(6)
+    expect(Generation::query()->count())->toBe(7)
         ->and(Generation::query()->where('prompt', 'like', '%[slow]%')->count())->toBe(1);
     Queue::assertPushed(SubmitGenerationToPixelforge::class, 7);
 });

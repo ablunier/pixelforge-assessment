@@ -6,6 +6,7 @@ use App\Actions\TopUp;
 use App\Enums\CreditPack;
 use App\Http\Requests\BuyCreditsRequest;
 use App\Http\Resources\LedgerEntryResource;
+use App\Models\LedgerEntry;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -13,22 +14,21 @@ use Inertia\Response;
 
 class CreditsController extends Controller
 {
-    /** How many of a user's newest ledger entries the page lists. */
-    public const int HISTORY_LIMIT = 100;
-
     /**
-     * The Buy credits page: the packs, and the user's ledger entries, newest first.
+     * The Buy credits page: the packs, and one page of the user's ledger
+     * entries, newest first.
      */
     public function show(Request $request): Response
     {
+        $history = $request->user()->ledgerEntries()->history()->paginate(LedgerEntry::HISTORY_PAGE_SIZE);
+
         return Inertia::render('Credits', [
             'packs' => array_map(fn (CreditPack $pack): array => [
                 'id' => $pack->value,
                 'amount' => $pack->amount()->nanodollars(),
             ], CreditPack::cases()),
-            'ledgerEntries' => LedgerEntryResource::collection(
-                $request->user()->ledgerEntries()->with('generation:id,prompt')->latest()->latest('id')->limit(self::HISTORY_LIMIT)->get(),
-            )->resolve($request),
+            'ledgerEntries' => LedgerEntryResource::collection($history->getCollection())->resolve($request),
+            'ledgerPage' => ['current' => $history->currentPage(), 'last' => $history->lastPage()],
         ]);
     }
 

@@ -16,10 +16,10 @@ enum CreditPack: string
 
     public function amount(): Money
     {
-        return Money::fromDecimal(match ($this) {
-            self::Five => '5',
-            self::Ten => '10',
-            self::TwentyFive => '25',
+        return Money::ofNanodollars(match ($this) {
+            self::Five => 5_000_000_000,
+            self::Ten => 10_000_000_000,
+            self::TwentyFive => 25_000_000_000,
         });
     }
 }

@@ -65,7 +65,7 @@ final class GenerationLifecycle
                 'max_price' => $maximumPrice,
             ]);
 
-            $this->writeLedgerEntry($generation, LedgerEntryKind::Hold, $maximumPrice);
+            LedgerEntry::record($generation->user_id, LedgerEntryKind::Hold, $maximumPrice, $generation->id);
 
             return $generation;
         });
@@ -262,27 +262,16 @@ final class GenerationLifecycle
             return;
         }
 
-        $none = Money::ofNanodollars(0);
-        $price ??= $none;
+        $price ??= Money::zero();
 
-        if ($price->isGreaterThan($none)) {
-            $this->writeLedgerEntry($generation, LedgerEntryKind::Charge, $price);
+        if ($price->isGreaterThan(Money::zero())) {
+            LedgerEntry::record($generation->user_id, LedgerEntryKind::Charge, $price, $generation->id);
         }
 
         // Nothing is left to release when the Price was capped at the Maximum Price (ADR-0004).
         $remainder = $hold->amount->minus($price);
-        if ($remainder->isGreaterThan($none)) {
-            $this->writeLedgerEntry($generation, LedgerEntryKind::HoldRelease, $remainder);
+        if ($remainder->isGreaterThan(Money::zero())) {
+            LedgerEntry::record($generation->user_id, LedgerEntryKind::HoldRelease, $remainder, $generation->id);
         }
-    }
-
-    /**
-     * Append one ledger entry for `$generation`, in its owner's ledger.
-     */
-    private function writeLedgerEntry(Generation $generation, LedgerEntryKind $kind, Money $amount): void
-    {
-        $entry = new LedgerEntry(['generation_id' => $generation->id, 'kind' => $kind, 'amount' => $amount]);
-        $entry->user_id = $generation->user_id;
-        $entry->save();
     }
 }

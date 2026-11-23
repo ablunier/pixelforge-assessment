@@ -30,12 +30,12 @@ final readonly class CachingPixelforgeClient implements PixelforgeClient
     private const int LAST_KNOWN_RATES_RETRY_SECONDS = 60;
 
     /**
-     * Billed costs are cached per date range, as BilledCosts::jsonSerialize()
+     * What Pixelforge billed is cached per date range, as PixelforgeBilled::jsonSerialize()
      * gives them. An entry in any other shape counts as a miss.
      */
-    private const string BILLED_COSTS_CACHE_KEY = 'pixelforge.billed-costs';
+    private const string BILLED_CACHE_KEY = 'pixelforge.billed';
 
-    private const int BILLED_COSTS_CACHE_SECONDS = 60;
+    private const int BILLED_CACHE_SECONDS = 60;
 
     public function __construct(
         private PixelforgeClient $pixelforge,
@@ -95,17 +95,17 @@ final readonly class CachingPixelforgeClient implements PixelforgeClient
      * What Pixelforge billed, cached for a minute per date range. A failure
      * isn't cached, so the next call asks again.
      */
-    public function billedCosts(CarbonImmutable $startDate, CarbonImmutable $endDate): BilledCosts
+    public function billed(CarbonImmutable $startDate, CarbonImmutable $endDate): PixelforgeBilled
     {
-        $key = self::BILLED_COSTS_CACHE_KEY.'.'.$startDate->toDateString().'.'.$endDate->toDateString();
-        $cached = BilledCosts::tryFromNanodollars($this->cache->get($key));
+        $key = self::BILLED_CACHE_KEY.'.'.$startDate->toDateString().'.'.$endDate->toDateString();
+        $cached = PixelforgeBilled::tryFromNanodollars($this->cache->get($key));
 
         if ($cached !== null) {
             return $cached;
         }
 
-        $billed = $this->pixelforge->billedCosts($startDate, $endDate);
-        $this->cache->put($key, $billed->jsonSerialize(), self::BILLED_COSTS_CACHE_SECONDS);
+        $billed = $this->pixelforge->billed($startDate, $endDate);
+        $this->cache->put($key, $billed->jsonSerialize(), self::BILLED_CACHE_SECONDS);
 
         return $billed;
     }

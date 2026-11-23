@@ -7,6 +7,8 @@ use App\Enums\LedgerEntryKind;
 use App\Money\Money;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\Scope;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use LogicException;
@@ -29,6 +31,23 @@ class LedgerEntry extends Model
 {
     public const null UPDATED_AT = null;
 
+    /** How many entries one page of the ledger history lists. */
+    public const int HISTORY_PAGE_SIZE = 50;
+
+    /**
+     * Append one entry to user `$userId`'s ledger: a Top-up, or a Hold, Hold
+     * release or Charge of Generation `$generationId`. The only way entries
+     * are written.
+     */
+    public static function record(int $userId, LedgerEntryKind $kind, Money $amount, ?string $generationId = null): self
+    {
+        $entry = new self(['generation_id' => $generationId, 'kind' => $kind, 'amount' => $amount]);
+        $entry->user_id = $userId;
+        $entry->save();
+
+        return $entry;
+    }
+
     protected static function booted(): void
     {
         static::updating(fn (): never => throw new LogicException('Ledger entries are append-only and are never updated.'));
@@ -44,6 +63,18 @@ class LedgerEntry extends Model
             'kind' => LedgerEntryKind::class,
             'amount' => AsMoney::class,
         ];
+    }
+
+    /**
+     * Entries as the ledger history lists them: newest first, each with the
+     * id and prompt of its Generation.
+     *
+     * @param  Builder<self>  $query
+     */
+    #[Scope]
+    protected function history(Builder $query): void
+    {
+        $query->with('generation:id,prompt')->latest()->orderByDesc('id');
     }
 
     /**

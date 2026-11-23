@@ -26,7 +26,7 @@ const passwordInput = useTemplateRef('passwordInput');
         <Heading
             variant="small"
             title="Delete account"
-            description="Delete your account and all of its resources"
+            description="Delete your account and sign out for good"
         />
         <div
             class="space-y-4 rounded-lg border border-red-100 bg-red-50 p-4 dark:border-red-200/10 dark:bg-red-700/10"
@@ -60,11 +60,11 @@ const passwordInput = useTemplateRef('passwordInput');
                                 account?</DialogTitle
                             >
                             <DialogDescription>
-                                Once your account is deleted, all of its
-                                resources and data will also be permanently
-                                deleted. Please enter your password to confirm
-                                you would like to permanently delete your
-                                account.
+                                Once your account is deleted, you can't sign in
+                                again or register a new account with its email.
+                                Its Generations and Credits history are kept for
+                                our records. Please enter your password to
+                                confirm you would like to delete your account.
                             </DialogDescription>
                         </DialogHeader>
 

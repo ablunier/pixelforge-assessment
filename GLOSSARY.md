@@ -81,12 +81,20 @@ Balance minus all active Holds; what a user can still commit to new Generations.
 _Avoid_: free balance, spendable
 
 **Top-up**:
-Credits added to a Balance, by buying a pack, as the starting grant, or when the reviewer account is set up.
+Credits added to a Balance, by buying a Credit pack, as the starting grant, or when the reviewer account is set up.
 _Avoid_: deposit, purchase, recharge
+
+**Credit pack**:
+A fixed amount of Credits ($5, $10 or $25) a user buys on the Buy credits page, adding one Top-up. The server sets each pack's amount; the client only names the pack.
+_Avoid_: bundle, plan, product
 
 **Hold**:
 The Maximum Price set aside from the Available Balance when a Generation is submitted, until that Generation is final.
 _Avoid_: reservation, authorization, pending charge
+
+**Hold release**:
+The part of a Hold returned to the Available Balance once its Generation is final: all of it on a failure, the Hold minus the Charge on a success, and nothing when the Price reached the Maximum Price. A Generation has at most one.
+_Avoid_: refund, unhold
 
 **Charge**:
 The Price deducted from a Balance when a Generation succeeds. A Generation has at most one Charge; a failed Generation has none.
@@ -95,3 +103,9 @@ _Avoid_: debit, payment, bill
 **Profit**:
 The sum of Charges minus the sum of Provider Costs for the same Generations.
 _Avoid_: margin, revenue
+
+## Reporting
+
+**Admin report**:
+The admins-only page of Generations, Charges, Provider Cost and Profit per UTC day and per user over a date range, with each day's Provider Cost set beside what Pixelforge billed for it.
+_Avoid_: dashboard, analytics, stats

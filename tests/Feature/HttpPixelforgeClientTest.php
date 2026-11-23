@@ -167,14 +167,15 @@ it('reads the current rates from GET /v1/pricing', function () {
 it('reads what Pixelforge billed per UTC day from GET /v1/usage, exactly', function () {
     Http::fake(['pixelforge.test/v1/usage*' => Http::response(usageObject())]);
 
-    $billed = httpPixelforge()->billedCosts(CarbonImmutable::parse('2026-11-01'), CarbonImmutable::parse('2026-11-02'));
+    $billed = httpPixelforge()->billed(CarbonImmutable::parse('2026-11-01'), CarbonImmutable::parse('2026-11-02'));
 
     Http::assertSent(fn (Request $request) => $request->method() === 'GET'
         && $request->url() === 'https://pixelforge.test/v1/usage?start_date=2026-11-01&end_date=2026-11-02'
         && $request->hasHeader('Authorization', 'Bearer pf_test_key'));
-    expect($billed->on('2026-11-01')?->nanodollars())->toBe(169_080_001)
-        ->and($billed->on('2026-11-02')?->nanodollars())->toBe(0)
-        ->and($billed->on('2026-11-03'))->toBeNull()
+    expect($billed->on(CarbonImmutable::parse('2026-11-01'))->nanodollars())->toBe(169_080_001)
+        ->and($billed->on(CarbonImmutable::parse('2026-11-02'))->nanodollars())->toBe(0)
+        // A day the answer leaves out counts as nothing billed.
+        ->and($billed->on(CarbonImmutable::parse('2026-11-03'))->nanodollars())->toBe(0)
         ->and($billed->total->nanodollars())->toBe(169_080_001);
 });
 
@@ -216,7 +217,7 @@ it('names an error without a body by its HTTP status', function (Closure $call) 
     'create' => [fn (HttpPixelforgeClient $pixelforge) => createLighthouse($pixelforge)],
     'retrieve' => [fn (HttpPixelforgeClient $pixelforge) => $pixelforge->retrieveGeneration('gen_01JC2Z8Q4N6V0M3H7X5T9R2B1K')],
     'rates' => [fn (HttpPixelforgeClient $pixelforge) => $pixelforge->rates()],
-    'billed costs' => [fn (HttpPixelforgeClient $pixelforge) => $pixelforge->billedCosts(CarbonImmutable::parse('2026-11-01'), CarbonImmutable::parse('2026-11-02'))],
+    'billed' => [fn (HttpPixelforgeClient $pixelforge) => $pixelforge->billed(CarbonImmutable::parse('2026-11-01'), CarbonImmutable::parse('2026-11-02'))],
     'image download' => [fn (HttpPixelforgeClient $pixelforge) => $pixelforge->downloadImage('https://pixelforge.test/images/lighthouse.png')],
 ]);
 
@@ -228,7 +229,7 @@ it('throws PixelforgeUnreachable when no response comes back', function (Closure
     'create' => [fn (HttpPixelforgeClient $pixelforge) => createLighthouse($pixelforge)],
     'retrieve' => [fn (HttpPixelforgeClient $pixelforge) => $pixelforge->retrieveGeneration('gen_01JC2Z8Q4N6V0M3H7X5T9R2B1K')],
     'rates' => [fn (HttpPixelforgeClient $pixelforge) => $pixelforge->rates()],
-    'billed costs' => [fn (HttpPixelforgeClient $pixelforge) => $pixelforge->billedCosts(CarbonImmutable::parse('2026-11-01'), CarbonImmutable::parse('2026-11-02'))],
+    'billed' => [fn (HttpPixelforgeClient $pixelforge) => $pixelforge->billed(CarbonImmutable::parse('2026-11-01'), CarbonImmutable::parse('2026-11-02'))],
     'image download' => [fn (HttpPixelforgeClient $pixelforge) => $pixelforge->downloadImage('https://pixelforge.test/images/lighthouse.png')],
 ]);
 
@@ -255,12 +256,12 @@ it('throws UnexpectedPixelforgeResponse for a success body it can\'t read', func
     'usage without a total' => [
         'pixelforge.test/v1/usage*',
         ['object' => 'usage', 'data' => usageObject()['data']],
-        fn (HttpPixelforgeClient $pixelforge) => $pixelforge->billedCosts(CarbonImmutable::parse('2026-11-01'), CarbonImmutable::parse('2026-11-02')),
+        fn (HttpPixelforgeClient $pixelforge) => $pixelforge->billed(CarbonImmutable::parse('2026-11-01'), CarbonImmutable::parse('2026-11-02')),
     ],
     'usage with a rounded cost' => [
         'pixelforge.test/v1/usage*',
         usageObject(firstDayCost: 0.16908),
-        fn (HttpPixelforgeClient $pixelforge) => $pixelforge->billedCosts(CarbonImmutable::parse('2026-11-01'), CarbonImmutable::parse('2026-11-02')),
+        fn (HttpPixelforgeClient $pixelforge) => $pixelforge->billed(CarbonImmutable::parse('2026-11-01'), CarbonImmutable::parse('2026-11-02')),
     ],
 ]);
 

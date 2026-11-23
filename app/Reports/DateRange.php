@@ -38,19 +38,19 @@ final readonly class DateRange
     }
 
     /**
-     * Each day of the range, in order, as `Y-m-d`.
+     * Each day of the range, in order, as the start of that UTC day.
      *
-     * @return list<string>
+     * @return list<CarbonImmutable>
      */
-    public function dates(): array
+    public function days(): array
     {
-        $dates = [];
+        $days = [];
 
         for ($day = $this->from; ! $day->isAfter($this->to); $day = $day->addDay()) {
-            $dates[] = $day->toDateString();
+            $days[] = $day;
         }
 
-        return $dates;
+        return $days;
     }
 
     /** The first instant after the range. */

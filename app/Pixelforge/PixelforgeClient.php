@@ -43,14 +43,11 @@ interface PixelforgeClient
      * `$endDate` inclusive, from GET /v1/usage. Pixelforge reports at most 92
      * days at a time.
      *
-     * CachingPixelforgeClient caches the answer for a minute, so refreshing a
-     * page that shows it doesn't use up the rate limit.
-     *
      * @throws PixelforgeError when Pixelforge rejects the request
      * @throws PixelforgeUnreachable when Pixelforge can't be reached
      * @throws UnexpectedPixelforgeResponse when a success response isn't usable usage
      */
-    public function billedCosts(CarbonImmutable $startDate, CarbonImmutable $endDate): BilledCosts;
+    public function billed(CarbonImmutable $startDate, CarbonImmutable $endDate): PixelforgeBilled;
 
     /**
      * POST /v1/generations. The local Generation id is sent as the

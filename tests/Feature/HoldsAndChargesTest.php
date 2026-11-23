@@ -6,7 +6,9 @@ use App\Models\Generation;
 use App\Models\User;
 use App\Money\Money;
 use App\Pricing\Rates;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Testing\TestResponse;
 use Tests\Pixelforge\InMemoryPixelforgeClient;
 use Tests\Pixelforge\Reported;
@@ -156,6 +158,24 @@ it('rejects a second submission, from another tab while the first is in flight, 
     expect(Generation::count())->toBe(1)
         ->and(pixelforge()->createRequests())->toHaveCount(1)
         ->and($user->availableBalance()->nanodollars())->toBe(800_000_000 - LIGHTHOUSE_MAX_PRICE);
+});
+
+it('locks the user\'s row before reading the Available Balance, so concurrent submissions queue behind each other', function () {
+    // One process can't race two requests, so this checks the lock they would queue on.
+    $user = userWithOneDollar();
+    $queries = [];
+    DB::listen(function (QueryExecuted $query) use (&$queries): void {
+        $queries[] = $query->sql;
+    });
+
+    submitLighthouse($user)->assertRedirect(route('dashboard'));
+
+    $userLock = collect($queries)->search(fn (string $sql): bool => str_contains($sql, 'from "users"') && str_ends_with($sql, 'for update'));
+    $balanceRead = collect($queries)->search(fn (string $sql): bool => str_contains($sql, 'from "ledger_entries"'));
+    $holdWritten = collect($queries)->search(fn (string $sql): bool => str_starts_with($sql, 'insert into "ledger_entries"'));
+    expect($userLock)->toBeInt()
+        ->and($balanceRead)->toBeInt()->toBeGreaterThan($userLock)
+        ->and($holdWritten)->toBeInt()->toBeGreaterThan($balanceRead);
 });
 
 it('lets a submission use the whole Available Balance', function () {
