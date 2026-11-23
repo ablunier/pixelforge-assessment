@@ -1,7 +1,6 @@
 <?php
 
 use App\Actions\GenerationLifecycle;
-use App\Console\Commands\ReconcileGenerations;
 use App\Enums\GenerationStatus;
 use App\Models\Generation;
 use App\Models\User;
@@ -9,6 +8,7 @@ use App\Pixelforge\GenerationSnapshot;
 use App\Pixelforge\UnexpectedPixelforgeResponse;
 use Illuminate\Console\Scheduling\Event;
 use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Http;
@@ -310,12 +310,50 @@ it('keeps polling the other Generations when one poll returns a response this ap
     Exceptions::assertReported(UnexpectedPixelforgeResponse::class);
 });
 
+/** A succeeded snapshot whose output tokens don't fit their column, so recording it fails in the database. */
+function unrecordableSuccess(string $pixelforgeId): array
+{
+    $succeeded = pixelforgeGeneration('succeeded', ['id' => $pixelforgeId]);
+    $succeeded['usage']['output_tokens'] = 3_000_000_000;
+
+    return $succeeded;
+}
+
+it('keeps polling the other Generations when recording one poll\'s result fails', function () {
+    Exceptions::fake();
+    $unrecordable = Generation::factory()->accepted()->create(['pixelforge_id' => 'gen_UNRECORDABLE', 'updated_at' => now()->subMinutes(2)]);
+    $later = Generation::factory()->accepted()->create(['pixelforge_id' => 'gen_01JC2Z8Q4N6V0M3H7X5T9R2B1K', 'updated_at' => now()->subMinutes(2)]);
+    Http::fake([
+        'pixelforge.test/v1/generations/gen_UNRECORDABLE' => Http::response(unrecordableSuccess('gen_UNRECORDABLE')),
+        'pixelforge.test/v1/generations/gen_01JC2Z8Q4N6V0M3H7X5T9R2B1K' => Http::response(pixelforgeGeneration('processing')),
+    ]);
+
+    reconcile();
+
+    expect($unrecordable->refresh()->status)->toBe(GenerationStatus::Queued)
+        ->and($later->refresh()->status)->toBe(GenerationStatus::Processing);
+    Exceptions::assertReported(QueryException::class);
+});
+
+it('gives up on a Generation whose last poll\'s result can\'t be recorded, once an hour has passed', function () {
+    Exceptions::fake();
+    $generation = Generation::factory()->accepted(GenerationStatus::Processing)->create(['pixelforge_id' => 'gen_UNRECORDABLE']);
+    Http::fake(['pixelforge.test/v1/generations/*' => Http::response(unrecordableSuccess('gen_UNRECORDABLE'))]);
+
+    $this->travel(Generation::GIVE_UP_AFTER_MINUTES + 1)->minutes();
+    reconcile();
+
+    expect($generation->refresh()->status)->toBe(GenerationStatus::Failed)
+        ->and($generation->error_code)->toBe('never_finished');
+    Exceptions::assertReported(QueryException::class);
+});
+
 it('gives up on a Generation Pixelforge hasn\'t finished an hour after Generate, with no Price and a readable reason', function () {
     $generation = Generation::factory()->accepted(GenerationStatus::Processing)
         ->create(['pixelforge_id' => 'gen_01JC2Z8Q4N6V0M3H7X5T9R2B1K']);
     Http::fake(['pixelforge.test/v1/generations/*' => Http::response(pixelforgeGeneration('processing'))]);
 
-    $this->travel(ReconcileGenerations::GIVE_UP_AFTER_MINUTES - 1)->minutes();
+    $this->travel(Generation::GIVE_UP_AFTER_MINUTES - 1)->minutes();
     reconcile();
 
     expect($generation->refresh()->status)->toBe(GenerationStatus::Processing);
@@ -344,7 +382,7 @@ it('gives up on a Generation Pixelforge no longer knows, once an hour has passed
         404,
     )]);
 
-    $this->travel(ReconcileGenerations::GIVE_UP_AFTER_MINUTES + 1)->minutes();
+    $this->travel(Generation::GIVE_UP_AFTER_MINUTES + 1)->minutes();
     reconcile();
 
     expect($generation->refresh()->status)->toBe(GenerationStatus::Failed)
@@ -356,7 +394,7 @@ it('records the Price when the last poll before giving up finds the Generation s
         ->create(['pixelforge_id' => 'gen_01JC2Z8Q4N6V0M3H7X5T9R2B1K']);
     Http::fake(['pixelforge.test/v1/generations/*' => Http::response(pixelforgeGeneration('succeeded'))]);
 
-    $this->travel(ReconcileGenerations::GIVE_UP_AFTER_MINUTES + 1)->minutes();
+    $this->travel(Generation::GIVE_UP_AFTER_MINUTES + 1)->minutes();
     reconcile();
 
     expect($generation->refresh()->status)->toBe(GenerationStatus::Succeeded)

@@ -1,7 +1,6 @@
 <?php
 
 use App\Actions\GenerationLifecycle;
-use App\Console\Commands\ReconcileGenerations;
 use App\Enums\GenerationStatus;
 use App\Jobs\SubmitGenerationToPixelforge;
 use App\Models\Generation;
@@ -91,7 +90,7 @@ it('never queues a second submission for a Generation whose retry is still waiti
     $generation = pressGenerate();
 
     // The queue is so busy the job hasn't started by the time reconciliation looks.
-    $this->travel(ReconcileGenerations::PENDING_STALE_AFTER_SECONDS + 1)->seconds();
+    $this->travel(Generation::PENDING_STALE_AFTER_SECONDS + 1)->seconds();
     $this->artisan('generations:reconcile')->assertSuccessful();
 
     Queue::assertPushed(SubmitGenerationToPixelforge::class, 1);
@@ -161,7 +160,7 @@ it('resends a Generation left pending after lost responses from reconciliation, 
     fakeCreateResponses([...array_fill(0, 5, responseLost()), Http::response(pixelforgeGeneration('queued'), 202, ['Idempotent-Replayed' => 'true'])]);
     $generation = pressGenerate();
 
-    $this->travel(ReconcileGenerations::PENDING_STALE_AFTER_SECONDS + 1)->seconds();
+    $this->travel(Generation::PENDING_STALE_AFTER_SECONDS + 1)->seconds();
     $this->artisan('generations:reconcile')->assertSuccessful();
 
     expect($generation->refresh()->status)->toBe(GenerationStatus::Queued)
@@ -175,7 +174,7 @@ it('resends a Generation left pending after lost responses from reconciliation, 
 function reconcileResends(int $times): void
 {
     for ($i = 0; $i < $times; $i++) {
-        test()->travel(ReconcileGenerations::PENDING_STALE_AFTER_SECONDS + 1)->seconds();
+        test()->travel(Generation::PENDING_STALE_AFTER_SECONDS + 1)->seconds();
         test()->artisan('generations:reconcile')->assertSuccessful();
     }
 }
@@ -319,7 +318,7 @@ it('leaves a pending Generation alone while its submission may still be retrying
 });
 
 it('renews a Generation\'s lease while it waits its turn at the concurrency limit, so reconciliation leaves it alone', function () {
-    $generation = Generation::factory()->create(['updated_at' => now()->subSeconds(ReconcileGenerations::PENDING_STALE_AFTER_SECONDS + 1)]);
+    $generation = Generation::factory()->create(['updated_at' => now()->subSeconds(Generation::PENDING_STALE_AFTER_SECONDS + 1)]);
 
     app(GenerationLifecycle::class)->recordSubmissionAttempt(
         $generation,
