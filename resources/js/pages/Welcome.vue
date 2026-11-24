@@ -66,11 +66,6 @@ const steps = [
                 >
                     Generate images from a prompt. Pay only for what you use.
                 </h1>
-                <p class="max-w-xl text-lg text-balance text-muted-foreground">
-                    Top up your Credits, describe what you want, and pay
-                    Pixelforge's Provider Cost plus a flat Markup for each
-                    Generation.
-                </p>
                 <Button as-child size="lg">
                     <Link :href="register()">Get started</Link>
                 </Button>
@@ -105,18 +100,6 @@ const steps = [
                         </li>
                     </ol>
                 </div>
-            </section>
-
-            <section
-                class="mx-auto w-full max-w-3xl px-4 py-14 text-center sm:px-6"
-            >
-                <h2 class="text-2xl font-semibold">
-                    A failed Generation costs nothing
-                </h2>
-                <p class="mt-3 text-muted-foreground">
-                    If a Generation fails, your Credits are not spent. You can
-                    Try again with the same Generation Parameters.
-                </p>
             </section>
         </main>
 
