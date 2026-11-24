@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deploys an image tag on the droplet: pulls it from GHCR, runs migrations and
+# Deploys an image tag on the production host: pulls it from GHCR, runs migrations and
 # restarts the stack. The deploy workflow copies this script and
 # compose.yaml next to .env in the stack directory and runs it over
 # SSH (see docs/deploy.md); run it by hand there to deploy or roll back.

@@ -4,7 +4,7 @@ Reconciliation polls every `queued` or `processing` Generation that has gone qui
 
 So a Generation still not final an hour after Generate is given up on. It ends as `failed` with the local code `never_finished` and no Provider Cost or Price, and its reason reads "Pixelforge never finished it". Reconciliation polls one last time first, so a Generation that did finish is recorded normally. Pixelforge documents 90 seconds or more for a Generation, so an hour is about 40 times that.
 
-This bends ADR-0005's rule that a Generation only becomes `failed` locally once Pixelforge has definitely not created it. Pixelforge did accept this one, and if it ever succeeds afterwards, the success is ignored (a final Generation never changes) and its Provider Cost isn't recorded. That's accepted because the alternative is polling forever. Reconciling against `GET /v1/usage` (stretch spec) would show any such Generation.
+This bends ADR-0005's rule that a Generation only becomes `failed` locally once Pixelforge has definitely not created it. Pixelforge did accept this one, and if it ever succeeds afterwards, the success is ignored (a final Generation never changes) and its Provider Cost isn't recorded. That's accepted because the alternative is polling forever. The Admin report's usage check against `GET /v1/usage` would show any such Generation as a day whose Provider Cost doesn't match.
 
 ## Considered Options
 

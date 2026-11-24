@@ -2,12 +2,12 @@
 
 A manual end-to-end check against the real Pixelforge sandbox, run by the owner in production before submission. It uses the reviewer account and leaves its Generations in place for the reviewers. Automated tests fake Pixelforge, so this is the only check against the real thing.
 
-Run the commands from `/opt/stacks/pixelforge` on the droplet. The `docker compose` commands below run the stack there.
+Run the commands from the stack directory on the production host (see [deploy.md](deploy.md)). The `docker compose` commands below run the stack there.
 
 ## 1. Before you start
 
 - [ ] The latest `main` is deployed: `curl -fsS https://pixelforge.blunier.me/up`.
-- [ ] `/opt/stacks/pixelforge/.env` has the **production** key's `PIXELFORGE_API_KEY` and `PIXELFORGE_WEBHOOK_SECRET`, not the local ones.
+- [ ] The stack's `.env` has the **production** key's `PIXELFORGE_API_KEY` and `PIXELFORGE_WEBHOOK_SECRET`, not the local ones.
 - [ ] In the Pixelforge dashboard, the production key's webhook URL is exactly `https://pixelforge.blunier.me/webhooks/pixelforge`, with no trailing slash and over `https`: Pixelforge doesn't follow redirects.
 - [ ] Press **Send test event** in the dashboard. The delivery shows a `200` response, and the `ping` is stored:
 
@@ -104,4 +104,3 @@ dump(["generations" => $done->count(), "cost_usd" => $done->reduce(fn ($sum, $g)
 ## 7. Leave it in place
 
 - [ ] Don't delete the reviewer's Generations: the reviewers compare them with Pixelforge's records.
-- [ ] Tick the matching criteria on issue #12, and the production money and reconciliation criteria on issue #18.

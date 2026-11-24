@@ -76,6 +76,7 @@ Quick-tunnel URLs change on every run, so update the webhook URL each time.
 | `PIXELFORGE_BASE_URL`       | API base URL. Defaults to `https://pixelforge.promptedit.dev/v1`.                  |
 | `PIXELFORGE_API_KEY`        | This environment's Pixelforge key. Use one key per environment.                    |
 | `PIXELFORGE_WEBHOOK_SECRET` | The same key's webhook signing secret (`whsec_…`).                                 |
+| `REVIEWER_NAME`             | The reviewer account's display name. Defaults to `Reviewer`.                       |
 | `REVIEWER_EMAIL`            | The reviewer account's email, for `reviewer:create` and `db:seed`.                 |
 | `REVIEWER_PASSWORD`         | Its password. Leave empty to have one generated and printed once. Never commit it. |
 
@@ -84,8 +85,9 @@ Quick-tunnel URLs change on every run, so update the webhook URL each time.
 Tests run against Postgres (the `testing` database, created by Sail) and never call the real Pixelforge API:
 
 ```sh
-./vendor/bin/sail composer ci:check   # frontend checks, Pint, Larastan and the Pest suite
+./vendor/bin/sail composer ci:check   # frontend lint, types and Vitest tests, then Pint, Larastan and the Pest suite
 ./vendor/bin/sail artisan test        # the Pest suite only
+npm test                              # the Vitest suite only
 ```
 
 The suite tests at the app's outer edge: Inertia requests, signed webhook POSTs built from Pixelforge's documented signing scheme, queued jobs and the reconciliation command, with Pixelforge held in memory behind the `PixelforgeClient` seam. `HttpPixelforgeClient` has its own wire-contract tests against faked HTTP. Pricing also has its own unit tests. The checks against the real sandbox are manual, in [docs/sandbox-verification.md](docs/sandbox-verification.md).
@@ -132,11 +134,11 @@ Credits live in an append-only ledger of Top-ups, Holds, Hold releases and Charg
 
 ### Admin report
 
-Admins (the reviewer account, or anyone made one with `php artisan user:make-admin <email>`) see a report at `/admin/report` for a date range of up to 92 days, the last 7 by default:
+Admins (the reviewer account, or anyone made one with `./vendor/bin/sail artisan user:make-admin <email>`, or in production `docker compose exec app php artisan user:make-admin <email>`) see a report at `/admin/report` for a date range of up to 92 days, the last 7 by default:
 
 - **Daily totals**: Generations, Charges (user spend), Provider Cost and Profit, counting each succeeded Generation on the UTC day it completed, as Pixelforge bills. Generations from before Balances existed have no Charge and count as zero spend.
 - **Per-user totals** of the same figures.
-- **Reconciliation**: each day's Provider Cost beside the `cost_usd` Pixelforge's `GET /v1/usage` reports for that day, parsed exactly into nanodollars. Any day where they differ is highlighted. If Pixelforge can't be reached, the report still shows the local figures. `/v1/usage` only covers the calling key, so the check is meaningful only in production against the production key.
+- **Usage check**: each day's Provider Cost beside the `cost_usd` Pixelforge's `GET /v1/usage` reports for that day, parsed exactly into nanodollars. Any day where they differ is highlighted. If Pixelforge can't be reached, the report still shows the local figures. `/v1/usage` only covers the calling key, so the check is meaningful only in production against the production key.
 
 ## Webhook robustness
 
@@ -149,29 +151,23 @@ Admins (the reviewer account, or anyone made one with `php artisan user:make-adm
 
 ## Production
 
-Live at <https://pixelforge.blunier.me>. Every push to `main` is tested and then deployed to the droplet. See [docs/deploy.md](docs/deploy.md) for the stack and the one-time manual setup (DNS, droplet bootstrap, GitHub secrets, the Pixelforge webhook URL).
+Every push to `main` is tested and then deployed to the production host. See [docs/deploy.md](docs/deploy.md) for the stack and the one-time manual setup (DNS and reverse proxy, the host, GitHub secrets, the Pixelforge webhook URL).
 
-The reviewer account is created in production with real Generations, one per sandbox keyword, so they match Pixelforge's own records. This is a deliberate departure from the spec's "a seeder creates … example Generations": `db:seed` still creates the account in production but skips the made-up examples, whose fake `gen_` ids and Provider Costs would never reconcile against Pixelforge's `GET /v1/usage` ([ADR-0008](docs/adr/0008-production-reviewer-examples.md)).
+The reviewer account is created in production with `reviewer:create --examples`, which submits real Generations, one per sandbox keyword, so they match Pixelforge's own records. This is a deliberate departure from the [spec](https://github.com/ablunier/pixelforge-assessment/issues/1)'s "a seeder creates … example Generations": `db:seed` still creates the account in production but skips the made-up examples, whose fake `gen_` ids and Provider Costs would never match Pixelforge's `GET /v1/usage` ([ADR-0008](docs/adr/0008-production-reviewer-examples.md)). The command and its options are in [docs/deploy.md](docs/deploy.md#7-reviewer-account-and-sandbox-checks).
 
-```sh
-docker compose exec -e REVIEWER_EMAIL=<reviewer-email> app php artisan reviewer:create --examples
-```
-
-The command makes the reviewer an admin and tops their Balance up to $10.00 before submitting the examples, enough to then try every quality and size. Running it again adds Credits only if the Balance has dropped below $10.00.
-
-[docs/sandbox-verification.md](docs/sandbox-verification.md) is the checklist for verifying `[succeed]`, `[fail]`, `[slow]`, `[duplicate]`, `[blocked]` and `[overloaded]`, the webhook deliveries, the money each one moves and the admin report's reconciliation against the real sandbox.
+[docs/sandbox-verification.md](docs/sandbox-verification.md) is the checklist for verifying `[succeed]`, `[fail]`, `[slow]`, `[duplicate]`, `[blocked]` and `[overloaded]`, the webhook deliveries, the money each one moves and the admin report's usage check against the real sandbox.
 
 ## Known limitations and next steps
 
 - **No real payments.** Buy credits adds Credits without charging anything. There are no refunds or manual ledger adjustments.
-- **Reconciliation only flags.** A day whose Provider Cost differs from `/v1/usage` is highlighted in the report, with no alerting, and the report can't be exported.
+- **The usage check only flags.** A day whose Provider Cost differs from `/v1/usage` is highlighted in the report, with no alerting, and the report can't be exported.
 - **One admin role.** `is_admin` is the only role. Admins are made from the command line, not in the app.
 - **Shared provider limits.** Pixelforge's limits (60 requests a minute, 3 concurrent, 500 a day) apply to the whole Pixelforge account, across the local and production keys.
 - **Per-user limits.** Each user may have 5 Generations in progress, 50 in any 24 hours and 10 a minute ([ADR-0006](docs/adr/0006-per-user-generation-limits.md)). Throwaway accounts still multiply these.
 - **History capped at 50.** The history shows a user's 50 newest Generations, with no pagination yet.
 - **Polling, not push.** The history polls every few seconds while a Generation is in flight. There are no WebSockets.
 - **No automatic retry after acceptance.** A Generation that fails at Pixelforge stays failed. Users press "Try again".
-- **Single droplet.** Images live on a Docker volume on one droplet, with no object storage or backups.
+- **Single host.** Images live on a Docker volume on one host, with no object storage or backups.
 - **No email.** Mail goes to the log, so password-reset emails aren't delivered.
 
 ## Resources

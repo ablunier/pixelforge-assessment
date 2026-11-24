@@ -1,9 +1,9 @@
-# Production stack for the DigitalOcean droplet. See docs/deploy.md.
-# Reads secrets from ./.env on the droplet (never committed). The image is
-# built and pushed to GHCR by the deploy workflow; deploy.sh records
+# Production stack. See docs/deploy.md.
+# Reads secrets from ./.env on the production host (never committed). The
+# image is built and pushed to GHCR by the deploy workflow; deploy.sh records
 # the deployed tag as IMAGE_TAG in .env.
 #
-# The shared Caddy in /opt/stacks/caddy terminates TLS and reaches the app as
+# A reverse proxy on the host terminates TLS and reaches the app as
 # `pixelforge-app:8080` over the external `proxy` network.
 name: pixelforge
 
