@@ -7,15 +7,36 @@ use App\Credits\InsufficientAvailableBalance;
 use App\Generations\GenerationParameters;
 use App\Http\Requests\StoreGenerationRequest;
 use App\Http\Requests\TryAgainRequest;
+use App\Http\Resources\GenerationResource;
 use App\Models\Generation;
 use App\Models\User;
 use App\Pixelforge\PricingUnavailable;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
+use Inertia\Inertia;
+use Inertia\Response;
 
 class GenerationController extends Controller
 {
     public function __construct(private readonly CreateGeneration $createGeneration) {}
+
+    /**
+     * The History page: the user's Generations, newest first. It polls itself
+     * for `generations` and `pollHistory` while any of them isn't final.
+     */
+    public function index(Request $request): Response
+    {
+        $user = $request->user();
+
+        return Inertia::render('History', [
+            'generations' => fn (): array => GenerationResource::collection(
+                $user->generations()->history()->get(),
+            )->resolve($request),
+            // The history polls for status updates only while this is true.
+            'pollHistory' => fn (): bool => $user->generations()->notFinal()->exists(),
+        ]);
+    }
 
     /**
      * Generate. Precognitive requests validate the form live and never reach
@@ -25,7 +46,7 @@ class GenerationController extends Controller
     {
         $this->create($request->user(), $request->parameters());
 
-        return to_route('dashboard');
+        return to_route('generations.index');
     }
 
     /**
@@ -36,7 +57,7 @@ class GenerationController extends Controller
     {
         $this->create($request->user(), $generation->parameters());
 
-        return to_route('dashboard');
+        return to_route('generations.index');
     }
 
     /**

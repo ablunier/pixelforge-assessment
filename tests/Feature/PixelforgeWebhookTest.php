@@ -394,7 +394,7 @@ function heldLighthouse(): Generation
             'quality' => 'high',
             'reference_images' => ['https://example.com/style.png'],
         ])
-        ->assertRedirect(route('dashboard'));
+        ->assertRedirect(route('generations.index'));
 
     return Generation::query()->latest('id')->firstOrFail();
 }

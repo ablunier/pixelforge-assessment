@@ -1,16 +1,10 @@
 <script setup lang="ts">
 import { Head } from '@inertiajs/vue3';
 import GenerateForm from '@/components/GenerateForm.vue';
-import GenerationHistory from '@/components/GenerationHistory.vue';
 import Heading from '@/components/Heading.vue';
 import { priceRange as mirroredPriceRange } from '@/lib/pricing';
 import { dashboard } from '@/routes';
-import type {
-    GenerateFormOptions,
-    Generation,
-    PriceRange,
-    PricingData,
-} from '@/types';
+import type { GenerateFormOptions, PriceRange, PricingData } from '@/types';
 
 defineOptions({
     layout: {
@@ -29,12 +23,8 @@ const props = defineProps<{
     /** The server's Price Range for the form's defaults; null with `pricing`. */
     priceRange: PriceRange | null;
     options: GenerateFormOptions;
-    /** The user's Generations, newest first. */
-    generations: Generation[];
     /** The user's Available Balance in integer nanodollars. */
     availableBalance: number;
-    /** Whether any of the user's Generations isn't final, so the history should poll. */
-    pollHistory: boolean;
 }>();
 
 // Guard against the TypeScript mirror drifting from App\Pricing\Pricing.
@@ -79,16 +69,6 @@ if (
                 :options="options"
                 :available-balance="availableBalance"
             />
-        </section>
-
-        <section
-            class="mx-auto w-full max-w-3xl rounded-xl border border-sidebar-border/70 p-6 dark:border-sidebar-border"
-        >
-            <Heading
-                title="Your Generations"
-                description="Newest first. Statuses update live until every Generation is final."
-            />
-            <GenerationHistory :generations="generations" :poll="pollHistory" />
         </section>
     </div>
 </template>

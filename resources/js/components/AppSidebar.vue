@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
-import { ChartColumn, LayoutGrid } from '@lucide/vue';
+import { ChartColumn, History, LayoutGrid } from '@lucide/vue';
 import { computed } from 'vue';
 import AppLogo from '@/components/AppLogo.vue';
 import NavBalance from '@/components/NavBalance.vue';
@@ -17,15 +17,21 @@ import {
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
 import { report as adminReport } from '@/routes/admin';
+import { index as history } from '@/routes/generations';
 import type { NavItem } from '@/types';
 
 const page = usePage();
 
 const mainNavItems = computed<NavItem[]>(() => [
     {
-        title: 'Dashboard',
+        title: 'Generate',
         href: dashboard(),
         icon: LayoutGrid,
+    },
+    {
+        title: 'History',
+        href: history(),
+        icon: History,
     },
     ...(page.props.can.viewAdminReport
         ? [{ title: 'Admin report', href: adminReport(), icon: ChartColumn }]

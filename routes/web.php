@@ -10,6 +10,7 @@ Route::inertia('/', 'Welcome')->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', DashboardController::class)->name('dashboard');
+    Route::get('history', [GenerationController::class, 'index'])->name('generations.index');
     Route::post('generations', [GenerationController::class, 'store'])
         ->middleware(['precognitive', 'throttle:generations'])
         ->name('generations.store');

@@ -62,7 +62,7 @@ it('seeds failures with no Provider Cost or Price and a readable reason', functi
     }
 
     $this->actingAs(User::query()->where('email', 'reviewer@example.com')->sole())
-        ->get(route('dashboard'))
+        ->get(route('generations.index'))
         ->assertInertia(fn (Assert $page) => $page
             ->where('generations', fn ($generations): bool => collect($generations)
                 ->pluck('error.reason')->filter()->sort()->values()->all()

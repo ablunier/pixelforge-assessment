@@ -56,7 +56,7 @@ function pollGenerations(): void
 it('holds the Maximum Price from the Available Balance when a Generation is submitted', function () {
     $user = userWithOneDollar();
 
-    submitLighthouse($user)->assertRedirect(route('dashboard'));
+    submitLighthouse($user)->assertRedirect(route('generations.index'));
 
     expect($user->balance()->nanodollars())->toBe(1_000_000_000)
         ->and($user->availableBalance()->nanodollars())->toBe(1_000_000_000 - LIGHTHOUSE_MAX_PRICE);
@@ -153,7 +153,7 @@ it('rejects a second submission, from another tab while the first is in flight, 
         return Reported::queued();
     });
 
-    submitLighthouse($user)->assertRedirect(route('dashboard'));
+    submitLighthouse($user)->assertRedirect(route('generations.index'));
 
     expect(Generation::count())->toBe(1)
         ->and(pixelforge()->createRequests())->toHaveCount(1)
@@ -168,7 +168,7 @@ it('locks the user\'s row before reading the Available Balance, so concurrent su
         $queries[] = $query->sql;
     });
 
-    submitLighthouse($user)->assertRedirect(route('dashboard'));
+    submitLighthouse($user)->assertRedirect(route('generations.index'));
 
     $userLock = collect($queries)->search(fn (string $sql): bool => str_contains($sql, 'from "users"') && str_ends_with($sql, 'for update'));
     $balanceRead = collect($queries)->search(fn (string $sql): bool => str_contains($sql, 'from "ledger_entries"'));
@@ -181,7 +181,7 @@ it('locks the user\'s row before reading the Available Balance, so concurrent su
 it('lets a submission use the whole Available Balance', function () {
     $user = User::factory()->withTopUp(Money::ofNanodollars(LIGHTHOUSE_MAX_PRICE))->create();
 
-    submitLighthouse($user)->assertRedirect(route('dashboard'));
+    submitLighthouse($user)->assertRedirect(route('generations.index'));
 
     expect($user->availableBalance()->nanodollars())->toBe(0);
 });
