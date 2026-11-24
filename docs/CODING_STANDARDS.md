@@ -6,6 +6,7 @@ Domain language lives in `GLOSSARY.md`; decisions in `docs/adr/`. Code must agre
 ## Style
 
 ### PHP
+
 - Code must pass `composer lint:check` (Pint, `laravel` preset) and `composer types:check` (Larastan level 7). Don't suppress static-analysis errors with ignores or baselines without a stated reason.
 - Declare parameter and return types on every method; add `@param`/`@return` generics docblocks only where native types can't express them (e.g. `array<int, string>`, `HasMany<Generation, $this>`).
 - Use constructor property promotion, `readonly` where state doesn't change, and backed enums for closed sets of values (e.g. Generation Status), never string constants or magic strings.
@@ -14,9 +15,11 @@ Domain language lives in `GLOSSARY.md`; decisions in `docs/adr/`. Code must agre
 - Prefer Eloquent and the query builder over raw SQL. Any raw expression must use bindings.
 
 ### Money
+
 - Money is an integer count of nanodollars wrapped in the `Money` value object (ADR 0001). Never use floats, `round()` or decimal strings for amounts, and never do money arithmetic on bare ints outside `Money`. Round only for display.
 
 ### Vue / TypeScript
+
 - Use `<script setup lang="ts">`. No `any`; type props, emits and Inertia page props explicitly (shared types in `resources/js/types`).
 - Must pass `npm run check` (`vp check`) and `npm run types:check`.
 - Components: PascalCase file names. Composables: `useXxx.ts` in `resources/js/composables`. Reuse the existing `components/ui` primitives before adding new ones.
