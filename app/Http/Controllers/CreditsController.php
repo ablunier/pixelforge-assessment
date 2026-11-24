@@ -22,7 +22,7 @@ class CreditsController extends Controller
     {
         $history = $request->user()->ledgerEntries()->history()->paginate(LedgerEntry::HISTORY_PAGE_SIZE);
 
-        return Inertia::render('Credits', [
+        return Inertia::render('settings/Credits', [
             'packs' => array_map(fn (CreditPack $pack): array => [
                 'id' => $pack->value,
                 'amount' => $pack->amount()->nanodollars(),

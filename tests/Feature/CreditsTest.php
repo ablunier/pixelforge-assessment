@@ -78,7 +78,7 @@ it('lists the user\'s ledger entries newest first', function () {
 
     $this->get(route('credits.show'))
         ->assertInertia(fn (Assert $page) => $page
-            ->component('Credits')
+            ->component('settings/Credits')
             ->where('balance', 40_000_000_000)
             ->has('ledgerEntries', 3)
             ->where('ledgerEntries.0.kind', 'top_up')

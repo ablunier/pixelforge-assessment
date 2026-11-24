@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { formatForDisplay } from '@/lib/money';
 import { dashboard } from '@/routes';
 import { show } from '@/routes/credits';
+import { edit as editProfile } from '@/routes/profile';
 import type {
     CreditPack,
     LedgerEntry,
@@ -20,6 +21,10 @@ import type {
 defineOptions({
     layout: {
         breadcrumbs: [
+            {
+                title: 'Settings',
+                href: editProfile(),
+            },
             {
                 title: 'Buy credits',
                 href: show(),
@@ -71,117 +76,106 @@ function formatDate(iso: string): string {
 <template>
     <Head title="Buy credits" />
 
-    <div class="flex h-full flex-1 flex-col gap-6 p-4">
-        <section
-            class="mx-auto w-full max-w-3xl rounded-xl border border-sidebar-border/70 p-6 dark:border-sidebar-border"
-        >
-            <Heading
-                title="Buy credits"
-                description="Credits are added at once. This is a demo: no payment is taken."
-            />
-            <p v-if="balance !== null" class="mb-4 text-sm">
-                Balance: <Price :nanodollars="balance" />
-            </p>
-            <div class="flex flex-wrap gap-3">
-                <Button
-                    v-for="pack in packs"
-                    :key="pack.id"
-                    :disabled="form.processing"
-                    @click="buy(pack)"
-                >
-                    Buy ${{
-                        formatForDisplay(BigInt(pack.amount)).replace(
-                            /\.0+$/,
-                            '',
-                        )
-                    }}
-                </Button>
-            </div>
-            <InputError class="mt-2" :message="form.errors.pack" />
-        </section>
+    <h1 class="sr-only">Buy credits</h1>
 
-        <section
-            class="mx-auto w-full max-w-3xl rounded-xl border border-sidebar-border/70 p-6 dark:border-sidebar-border"
+    <div class="space-y-6">
+        <Heading
+            variant="small"
+            title="Buy credits"
+            description="Credits are added at once. This is a demo: no payment is taken."
+        />
+        <p v-if="balance !== null" class="text-sm">
+            Balance: <Price :nanodollars="balance" />
+        </p>
+        <div class="flex flex-wrap gap-3">
+            <Button
+                v-for="pack in packs"
+                :key="pack.id"
+                :disabled="form.processing"
+                @click="buy(pack)"
+            >
+                Buy ${{
+                    formatForDisplay(BigInt(pack.amount)).replace(/\.0+$/, '')
+                }}
+            </Button>
+        </div>
+        <InputError :message="form.errors.pack" />
+    </div>
+
+    <div class="space-y-6">
+        <Heading
+            variant="small"
+            title="History"
+            description="Your Top-ups, Holds and Charges, newest first."
+        />
+        <p
+            v-if="ledgerEntries.length === 0"
+            class="py-6 text-center text-sm text-muted-foreground"
         >
-            <Heading
-                title="History"
-                description="Your Top-ups, Holds and Charges, newest first."
-            />
-            <p
-                v-if="ledgerEntries.length === 0"
-                class="py-6 text-center text-sm text-muted-foreground"
+            Nothing yet.
+        </p>
+        <ul v-else class="divide-y">
+            <li
+                v-for="entry in ledgerEntries"
+                :key="entry.id"
+                class="flex items-center justify-between gap-4 py-3 text-sm"
             >
-                Nothing yet.
-            </p>
-            <ul v-else class="divide-y">
-                <li
-                    v-for="entry in ledgerEntries"
-                    :key="entry.id"
-                    class="flex items-center justify-between gap-4 py-3 text-sm"
-                >
-                    <div class="flex min-w-0 flex-col">
-                        <span class="font-medium">{{
-                            kindLabels[entry.kind]
-                        }}</span>
-                        <TextLink
-                            v-if="entry.generation !== null"
-                            :href="generationHref(entry.generation.id)"
-                            class="truncate"
-                            :title="entry.generation.prompt"
-                            >{{ entry.generation.prompt }}</TextLink
-                        >
-                        <time
-                            :datetime="entry.createdAt"
-                            class="text-muted-foreground"
-                            >{{ formatDate(entry.createdAt) }}</time
-                        >
-                    </div>
-                    <span class="tabular-nums"
-                        >{{ sign(entry.kind) }}
-                        <Price :nanodollars="entry.amount"
-                    /></span>
-                </li>
-            </ul>
-            <nav
-                v-if="ledgerPage.last > 1"
-                aria-label="History pages"
-                class="flex items-center justify-between pt-4 text-sm"
+                <div class="flex min-w-0 flex-col">
+                    <span class="font-medium">{{
+                        kindLabels[entry.kind]
+                    }}</span>
+                    <TextLink
+                        v-if="entry.generation !== null"
+                        :href="generationHref(entry.generation.id)"
+                        class="truncate"
+                        :title="entry.generation.prompt"
+                        >{{ entry.generation.prompt }}</TextLink
+                    >
+                    <time
+                        :datetime="entry.createdAt"
+                        class="text-muted-foreground"
+                        >{{ formatDate(entry.createdAt) }}</time
+                    >
+                </div>
+                <span class="shrink-0 tabular-nums"
+                    >{{ sign(entry.kind) }} <Price :nanodollars="entry.amount"
+                /></span>
+            </li>
+        </ul>
+        <nav
+            v-if="ledgerPage.last > 1"
+            aria-label="History pages"
+            class="flex items-center justify-between text-sm"
+        >
+            <Button
+                v-if="ledgerPage.current > 1"
+                variant="outline"
+                size="sm"
+                as-child
             >
-                <Button
-                    v-if="ledgerPage.current > 1"
-                    variant="outline"
-                    size="sm"
-                    as-child
+                <Link
+                    :href="show({ query: { page: ledgerPage.current - 1 } })"
+                    preserve-scroll
+                    >Newer</Link
                 >
-                    <Link
-                        :href="
-                            show({ query: { page: ledgerPage.current - 1 } })
-                        "
-                        preserve-scroll
-                        >Newer</Link
-                    >
-                </Button>
-                <span v-else />
-                <span class="text-muted-foreground"
-                    >Page {{ ledgerPage.current }} of
-                    {{ ledgerPage.last }}</span
+            </Button>
+            <span v-else />
+            <span class="text-muted-foreground"
+                >Page {{ ledgerPage.current }} of {{ ledgerPage.last }}</span
+            >
+            <Button
+                v-if="ledgerPage.current < ledgerPage.last"
+                variant="outline"
+                size="sm"
+                as-child
+            >
+                <Link
+                    :href="show({ query: { page: ledgerPage.current + 1 } })"
+                    preserve-scroll
+                    >Older</Link
                 >
-                <Button
-                    v-if="ledgerPage.current < ledgerPage.last"
-                    variant="outline"
-                    size="sm"
-                    as-child
-                >
-                    <Link
-                        :href="
-                            show({ query: { page: ledgerPage.current + 1 } })
-                        "
-                        preserve-scroll
-                        >Older</Link
-                    >
-                </Button>
-                <span v-else />
-            </nav>
-        </section>
+            </Button>
+            <span v-else />
+        </nav>
     </div>
 </template>
