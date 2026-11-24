@@ -1,7 +1,5 @@
 <script setup lang="ts">
-import { Link, usePage } from '@inertiajs/vue3';
-import { ChartColumn, LayoutGrid } from '@lucide/vue';
-import { computed } from 'vue';
+import { Link } from '@inertiajs/vue3';
 import AppLogo from '@/components/AppLogo.vue';
 import NavBalance from '@/components/NavBalance.vue';
 import NavMain from '@/components/NavMain.vue';
@@ -15,22 +13,10 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
+import { useMainNavItems } from '@/composables/useMainNavItems';
 import { generate } from '@/routes';
-import { report as adminReport } from '@/routes/admin';
-import type { NavItem } from '@/types';
 
-const page = usePage();
-
-const mainNavItems = computed<NavItem[]>(() => [
-    {
-        title: 'Generate',
-        href: generate(),
-        icon: LayoutGrid,
-    },
-    ...(page.props.can.viewAdminReport
-        ? [{ title: 'Admin report', href: adminReport(), icon: ChartColumn }]
-        : []),
-]);
+const mainNavItems = useMainNavItems();
 </script>
 
 <template>
