@@ -44,7 +44,7 @@ function succeededAt(User $user, string $createdAt, string $completedAt, ?Usage 
         InMemoryPixelforgeClient::publishedRates(),
     );
 
-    return $lifecycle->apply($generation, new GenerationSnapshot(
+    $generation = $lifecycle->apply($generation, new GenerationSnapshot(
         pixelforgeId: InMemoryPixelforgeClient::pixelforgeIdFor($generation->id),
         status: GenerationStatus::Succeeded,
         generationId: $generation->id,
@@ -58,6 +58,11 @@ function succeededAt(User $user, string $createdAt, string $completedAt, ?Usage 
         startedAt: CarbonImmutable::parse($createdAt),
         completedAt: CarbonImmutable::parse($completedAt),
     ));
+
+    // Back to now, so the report can reach days after this Generation completed.
+    test()->travelBack();
+
+    return $generation;
 }
 
 it('denies the report to a user who isn\'t an admin', function () {
@@ -125,6 +130,27 @@ it('refuses a range it can\'t report', function (array $range, string $error) {
     'a malformed start' => [['from' => '31/10/2026', 'to' => '2026-10-31'], 'from'],
     'an impossible end' => [['from' => '2026-10-01', 'to' => '2026-02-30'], 'to'],
 ]);
+
+it('refuses a range ending after today, without asking Pixelforge', function () {
+    $this->travelTo('2026-11-23T23:59:00Z');
+
+    $this->actingAs(admin())
+        ->from(route('dashboard'))
+        ->get(route('admin.report', ['from' => '2026-11-20', 'to' => '2026-11-24']))
+        ->assertRedirect(route('dashboard'))
+        ->assertSessionHasErrors(['to' => 'The end date can\'t be after today (UTC).']);
+
+    expect(pixelforge()->usageRequests())->toBe([]);
+});
+
+it('reports a range ending today', function () {
+    $this->travelTo('2026-11-23T00:00:00Z');
+
+    $this->actingAs(admin())
+        ->get(route('admin.report', ['from' => '2026-11-20', 'to' => '2026-11-23']))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page->where('range.to', '2026-11-23'));
+});
 
 it('covers the last 30 UTC days by default, with a row for each day even without activity', function () {
     $this->travelTo('2026-11-23T10:00:00Z');

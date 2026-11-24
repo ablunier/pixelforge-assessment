@@ -11,7 +11,8 @@ use Illuminate\Validation\Validator;
 
 /**
  * The admin report's date range: UTC days `from` to `to`, inclusive. Each
- * defaults so the range is the last DEFAULT_DAYS days, and it can span at
+ * defaults so the range is the last DEFAULT_DAYS days. It ends today at the
+ * latest, since nothing has been billed for a later day, and it can span at
  * most MAX_DAYS, the most Pixelforge's usage report covers.
  */
 class AdminReportRequest extends FormRequest
@@ -46,7 +47,9 @@ class AdminReportRequest extends FormRequest
 
                 [$from, $to] = $this->bounds();
 
-                if ($to->isBefore($from)) {
+                if ($to->isAfter(CarbonImmutable::now('UTC')->startOfDay())) {
+                    $validator->errors()->add('to', 'The end date can\'t be after today (UTC).');
+                } elseif ($to->isBefore($from)) {
                     $validator->errors()->add('to', 'The end date must be on or after the start date.');
                 } elseif ((new DateRange($from, $to))->dayCount() > self::MAX_DAYS) {
                     $validator->errors()->add('to', 'Choose a range of at most '.self::MAX_DAYS.' days.');
