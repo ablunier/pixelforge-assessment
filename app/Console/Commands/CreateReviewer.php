@@ -68,7 +68,10 @@ class CreateReviewer extends Command
         $configuredPassword = config('reviewer.password');
         $generatedPassword = null;
 
-        $reviewer = User::query()->firstOrNew(['email' => $email]);
+        // A reviewer who deleted their account still holds the email, so bring
+        // that account back rather than create a second one.
+        $reviewer = User::withTrashed()->firstOrNew(['email' => $email]);
+        $reviewer->deleted_at = null;
         $reviewer->name = (string) config('reviewer.name');
         $reviewer->is_admin = true;
 

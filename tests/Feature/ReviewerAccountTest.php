@@ -83,6 +83,19 @@ it('changes the password when run again with a new one configured', function () 
     $this->assertAuthenticated();
 });
 
+it('brings back a reviewer who deleted their account, with the configured password', function () {
+    config(['reviewer.email' => 'reviewer@example.com', 'reviewer.password' => 'a-long-secret-password']);
+    createReviewer();
+    User::query()->where('email', 'reviewer@example.com')->sole()->delete();
+
+    createReviewer();
+
+    expect(User::withTrashed()->where('email', 'reviewer@example.com')->count())->toBe(1);
+    $this->post(route('login.store'), ['email' => 'reviewer@example.com', 'password' => 'a-long-secret-password'])
+        ->assertRedirect(route('dashboard'));
+    $this->assertAuthenticated();
+});
+
 function reviewer(): User
 {
     return User::query()->where('email', 'reviewer@example.com')->sole();
