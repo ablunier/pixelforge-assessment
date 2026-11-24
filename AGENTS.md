@@ -16,6 +16,7 @@ PHP tests need the Sail stack running (`docker compose up`): they use the Sail P
 | PHP static analysis   | `composer types:check`                               |
 | Frontend lint/format  | `npm run check` (`npm run check:fix` to fix)         |
 | Frontend types        | `npm run types:check`                                |
+| Frontend tests        | `npm test`                                           |
 | Full CI (before a PR) | `./vendor/bin/sail composer ci:check`                |
 
 ## External References

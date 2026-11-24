@@ -23,10 +23,10 @@ it('lists the user\'s Generations newest first with status, Maximum Price, and P
     $pending = Generation::factory()->for($user)->create(['prompt' => 'A lighthouse at night']);
 
     $this->actingAs($user)
-        ->get(route('generate'))
+        ->get(route('generations.index'))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
-            ->component('Generate')
+            ->component('History')
             ->has('generations', 3)
             ->where('generations.0.id', $pending->id)
             ->where('generations.0.status', 'pending')
@@ -59,7 +59,7 @@ it('never shows a user another user\'s Generations', function () {
     Generation::factory()->for(User::factory())->create(['prompt' => 'Someone else\'s secret prompt']);
 
     $this->actingAs($user)
-        ->get(route('generate'))
+        ->get(route('generations.index'))
         ->assertOk()
         ->assertDontSee('Someone else\'s secret prompt')
         ->assertInertia(fn (Assert $page) => $page
@@ -79,7 +79,7 @@ it('signals the history to keep polling while any of the user\'s Generations isn
     };
 
     $this->actingAs($user)
-        ->get(route('generate'))
+        ->get(route('generations.index'))
         ->assertInertia(fn (Assert $page) => $page->where('pollHistory', true));
 })->with(['pending', 'queued', 'processing']);
 
@@ -90,13 +90,13 @@ it('signals the history to stop polling once all the user\'s Generations are fin
     Generation::factory()->for(User::factory())->create();
 
     $this->actingAs($user)
-        ->get(route('generate'))
+        ->get(route('generations.index'))
         ->assertInertia(fn (Assert $page) => $page->where('pollHistory', false));
 });
 
 it('shows an empty history, not polling, to a user with no Generations', function () {
     $this->actingAs(User::factory()->create())
-        ->get(route('generate'))
+        ->get(route('generations.index'))
         ->assertInertia(fn (Assert $page) => $page
             ->has('generations', 0)
             ->where('pollHistory', false)
@@ -112,7 +112,7 @@ it('caps the history at the user\'s 50 newest Generations', function () {
     $newest = Generation::factory()->for($user)->create();
 
     $this->actingAs($user)
-        ->get(route('generate'))
+        ->get(route('generations.index'))
         ->assertInertia(fn (Assert $page) => $page
             ->has('generations', 50)
             ->where('generations.0.id', $newest->id)
@@ -125,10 +125,10 @@ it('refreshes only the history when polled, without asking Pixelforge for rates'
     $generation = Generation::factory()->for($user)->accepted()->create();
 
     $this->actingAs($user)
-        ->get(route('generate'), [
+        ->get(route('generations.index'), [
             'X-Inertia' => 'true',
             'X-Inertia-Version' => app(HandleInertiaRequests::class)->version(request()),
-            'X-Inertia-Partial-Component' => 'Generate',
+            'X-Inertia-Partial-Component' => 'History',
             'X-Inertia-Partial-Data' => 'generations,pollHistory',
         ])
         ->assertOk()
@@ -155,9 +155,43 @@ it('shows a newly submitted Generation at the top of the history as pending, and
         ])
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
+            ->component('History')
             ->has('generations', 2)
             ->where('generations.0.prompt', 'A lighthouse at night')
             ->where('generations.0.status', 'pending')
             ->where('pollHistory', true)
+        );
+});
+
+it('redirects guests from the history to the login page', function () {
+    $this->get(route('generations.index'))->assertRedirect(route('login'));
+});
+
+it('takes the user to the history after a submit', function () {
+    Queue::fake();
+    $user = User::factory()->withTopUp()->create();
+
+    $this->actingAs($user)
+        ->post(route('generations.store'), [
+            'prompt' => 'A lighthouse at night',
+            'size' => '1024x1024',
+            'quality' => 'low',
+            'reference_images' => [],
+        ])
+        ->assertRedirect(route('generations.index'));
+});
+
+it('keeps the history off the Generate page', function () {
+    $user = User::factory()->create();
+    Generation::factory()->for($user)->create();
+
+    $this->actingAs($user)
+        ->get(route('generate'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Generate')
+            ->missing('generations')
+            ->missing('pollHistory')
+            ->has('availableBalance')
         );
 });

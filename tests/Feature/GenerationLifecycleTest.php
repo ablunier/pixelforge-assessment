@@ -37,7 +37,7 @@ function generateLighthouse(?User $user = null): Generation
             'quality' => 'high',
             'reference_images' => ['https://example.com/style.png'],
         ])
-        ->assertRedirect(route('generate'));
+        ->assertRedirect(route('generations.index'));
 
     return Generation::query()->latest('id')->firstOrFail();
 }
@@ -269,7 +269,7 @@ it('gives up on a Generation Pixelforge hasn\'t finished an hour after Generate,
         ->and($generation->price)->toBeNull();
 
     $this->actingAs($generation->user)
-        ->get(route('generate'))
+        ->get(route('generations.index'))
         ->assertInertia(fn (Assert $page) => $page
             ->where('generations.0.error.reason', 'Pixelforge never finished it')
             ->where('pollHistory', false));

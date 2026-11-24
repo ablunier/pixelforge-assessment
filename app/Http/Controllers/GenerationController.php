@@ -25,7 +25,7 @@ class GenerationController extends Controller
     {
         $this->create($request->user(), $request->parameters());
 
-        return to_route('generate');
+        return to_route('generations.index');
     }
 
     /**
@@ -36,7 +36,7 @@ class GenerationController extends Controller
     {
         $this->create($request->user(), $generation->parameters());
 
-        return to_route('generate');
+        return to_route('generations.index');
     }
 
     /**

@@ -4,6 +4,7 @@ use App\Http\Controllers\AdminReportController;
 use App\Http\Controllers\GenerateController;
 use App\Http\Controllers\GenerationController;
 use App\Http\Controllers\GenerationImageController;
+use App\Http\Controllers\HistoryController;
 use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'Welcome')->name('home');
@@ -11,6 +12,7 @@ Route::redirect('dashboard', '/generate');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('generate', GenerateController::class)->name('generate');
+    Route::get('history', HistoryController::class)->name('generations.index');
     Route::post('generations', [GenerationController::class, 'store'])
         ->middleware(['precognitive', 'throttle:generations'])
         ->name('generations.store');

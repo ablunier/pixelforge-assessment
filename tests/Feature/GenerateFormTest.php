@@ -1,7 +1,7 @@
 <?php
 
-use App\Models\Generation;
 use App\Models\User;
+use App\Money\Money;
 use App\Pixelforge\PricingUnavailable;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Queue;
@@ -49,11 +49,10 @@ it('keeps the Pixelforge API key out of the page props', function () {
         ->assertDontSee('pf_test_secret');
 });
 
-it('still shows the history, with no pricing, when Pixelforge can\'t quote rates and none are known', function () {
+it('still shows the generate form, with no pricing, when Pixelforge can\'t quote rates and none are known', function () {
     Exceptions::fake();
     pixelforge()->answerRates(InMemoryPixelforgeClient::refusal('overloaded'));
-    $user = User::factory()->create();
-    Generation::factory()->for($user)->succeeded()->create();
+    $user = User::factory()->withTopUp(Money::ofNanodollars(1_000_000_000))->create();
 
     $this->actingAs($user)
         ->get(route('generate'))
@@ -61,7 +60,7 @@ it('still shows the history, with no pricing, when Pixelforge can\'t quote rates
         ->assertInertia(fn (Assert $page) => $page
             ->where('pricing', null)
             ->where('priceRange', null)
-            ->has('generations', 1)
+            ->where('availableBalance', 1_000_000_000)
         );
 
     Exceptions::assertReported(PricingUnavailable::class);

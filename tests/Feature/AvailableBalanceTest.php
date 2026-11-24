@@ -1,6 +1,6 @@
 <?php
 
-use App\Http\Middleware\HandleInertiaRequests;
+use App\Enums\GenerationStatus;
 use App\Models\Generation;
 use App\Models\User;
 use App\Money\Money;
@@ -35,7 +35,7 @@ it('gives the main page the user\'s Available Balance', function () {
 it('takes active Holds off the Available Balance on the main page', function () {
     $user = User::factory()->withTopUp(Money::ofNanodollars(1_000_000_000))->create();
 
-    pressGenerateWithLighthouse($user)->assertRedirect(route('generate'));
+    pressGenerateWithLighthouse($user)->assertRedirect(route('generations.index'));
 
     $this->get(route('generate'))
         ->assertInertia(fn (Assert $page) => $page
@@ -43,23 +43,17 @@ it('takes active Holds off the Available Balance on the main page', function () 
             ->where('balance', 1_000_000_000));
 });
 
-it('gives a released Hold back to the Available Balance when the history polls', function () {
+it('gives a released Hold back to the Available Balance once the Generation fails', function () {
     $user = User::factory()->withTopUp(Money::ofNanodollars(1_000_000_000))->create();
     pressGenerateWithLighthouse($user);
     pixelforge()->answerRetrieves(Generation::query()->sole(), Reported::failed());
     $this->travel(61)->seconds();
     $this->artisan('generations:reconcile')->assertSuccessful();
 
-    $this->get(route('generate'), [
-        'X-Inertia' => 'true',
-        'X-Inertia-Version' => app(HandleInertiaRequests::class)->version(request()),
-        'X-Inertia-Partial-Component' => 'Generate',
-        'X-Inertia-Partial-Data' => 'generations,pollHistory,availableBalance,balance',
-    ])
-        ->assertOk()
-        ->assertJsonPath('props.generations.0.status', 'failed')
-        ->assertJsonPath('props.availableBalance', 1_000_000_000)
-        ->assertJsonMissingPath('props.pricing');
+    expect(Generation::query()->sole()->status)->toBe(GenerationStatus::Failed);
+
+    $this->get(route('generate'))
+        ->assertInertia(fn (Assert $page) => $page->where('availableBalance', 1_000_000_000));
 });
 
 it('shows the insufficient-credits rejection on the main page as an error under generate', function () {
