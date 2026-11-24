@@ -2,9 +2,9 @@
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import { Download, Hammer, PenLine, Wallet } from '@lucide/vue';
 import { Button } from '@/components/ui/button';
-import { dashboard, login, register } from '@/routes';
+import { dashboard, home, login, register } from '@/routes';
 
-const name = usePage().props.name;
+const appName = usePage().props.name;
 
 const steps = [
     {
@@ -14,8 +14,8 @@ const steps = [
     },
     {
         icon: Wallet,
-        title: 'Pay the cost plus the Markup',
-        body: "A successful Generation is paid from your Credits at Pixelforge's cost plus a 25% Markup.",
+        title: 'Pay the Price',
+        body: "A successful Generation is paid from your Credits: Pixelforge's Provider Cost plus a flat Markup.",
     },
     {
         icon: Download,
@@ -26,20 +26,23 @@ const steps = [
 </script>
 
 <template>
-    <Head title="AI image generation, billed at cost plus Markup" />
+    <Head title="AI image generation, paid from your Credits" />
 
     <div class="flex min-h-screen flex-col bg-background text-foreground">
         <header class="border-b">
             <nav
                 class="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-4 py-3 sm:px-6"
             >
-                <Link href="/" class="flex items-center gap-2 font-semibold">
+                <Link
+                    :href="home()"
+                    class="flex items-center gap-2 font-semibold"
+                >
                     <span
                         class="flex size-8 items-center justify-center rounded-md bg-primary text-primary-foreground"
                     >
                         <Hammer class="size-5" />
                     </span>
-                    {{ name }}
+                    {{ appName }}
                 </Link>
                 <div class="flex items-center gap-2">
                     <Button v-if="$page.props.auth.user" as-child size="sm">
@@ -68,7 +71,8 @@ const steps = [
                 </h1>
                 <p class="max-w-xl text-lg text-balance text-muted-foreground">
                     Top up your Credits, describe what you want, and pay
-                    Pixelforge's cost plus a flat Markup for each Generation.
+                    Pixelforge's Provider Cost plus a flat Markup for each
+                    Generation.
                 </p>
                 <Button as-child size="lg">
                     <Link :href="register()">Get started</Link>
@@ -114,7 +118,7 @@ const steps = [
                 </h2>
                 <p class="mt-3 text-muted-foreground">
                     If a Generation fails, your Credits are not spent. You can
-                    try again with the same settings.
+                    Try again with the same Generation Parameters.
                 </p>
             </section>
         </main>
@@ -123,7 +127,7 @@ const steps = [
             <div
                 class="mx-auto w-full max-w-5xl px-4 py-6 text-sm text-muted-foreground sm:px-6"
             >
-                &copy; {{ new Date().getFullYear() }} {{ name }}
+                &copy; {{ new Date().getFullYear() }} {{ appName }}
             </div>
         </footer>
     </div>
