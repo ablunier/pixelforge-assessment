@@ -55,7 +55,7 @@ function historyImage(User $user): ?array
 {
     $image = null;
 
-    test()->actingAs($user)->get(route('dashboard'))
+    test()->actingAs($user)->get(route('generate'))
         ->assertInertia(function (Assert $page) use (&$image) {
             $image = $page->toArray()['props']['generations'][0]['image'];
 

@@ -4,7 +4,7 @@ import GenerateForm from '@/components/GenerateForm.vue';
 import GenerationHistory from '@/components/GenerationHistory.vue';
 import Heading from '@/components/Heading.vue';
 import { priceRange as mirroredPriceRange } from '@/lib/pricing';
-import { dashboard } from '@/routes';
+import { generate } from '@/routes';
 import type {
     GenerateFormOptions,
     Generation,
@@ -17,7 +17,7 @@ defineOptions({
         breadcrumbs: [
             {
                 title: 'Generate',
-                href: dashboard(),
+                href: generate(),
             },
         ],
     },

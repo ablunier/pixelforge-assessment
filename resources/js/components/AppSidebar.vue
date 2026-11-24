@@ -16,7 +16,7 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { dashboard } from '@/routes';
+import { generate } from '@/routes';
 import { report as adminReport } from '@/routes/admin';
 import type { NavItem } from '@/types';
 
@@ -24,8 +24,8 @@ const page = usePage();
 
 const mainNavItems = computed<NavItem[]>(() => [
     {
-        title: 'Dashboard',
-        href: dashboard(),
+        title: 'Generate',
+        href: generate(),
         icon: LayoutGrid,
     },
     ...(page.props.can.viewAdminReport
@@ -53,7 +53,7 @@ const footerNavItems: NavItem[] = [
             <SidebarMenu>
                 <SidebarMenuItem>
                     <SidebarMenuButton size="lg" as-child>
-                        <Link :href="dashboard()">
+                        <Link :href="generate()">
                             <AppLogo />
                         </Link>
                     </SidebarMenuButton>

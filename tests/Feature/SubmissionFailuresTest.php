@@ -35,7 +35,7 @@ function pressGenerate(string $prompt = 'A lighthouse on a cliff at dawn, oil pa
             'quality' => 'high',
             'reference_images' => ['https://example.com/style.png'],
         ])
-        ->assertRedirect(route('dashboard'));
+        ->assertRedirect(route('generate'));
 
     return Generation::query()->latest('id')->firstOrFail();
 }
@@ -141,7 +141,7 @@ it('fails a Generation whose responses were lost for 20 attempts, with no Price 
         ->and(createRequestsSent())->toBe(20);
 
     $this->actingAs($generation->user)
-        ->get(route('dashboard'))
+        ->get(route('generate'))
         ->assertInertia(fn (Assert $page) => $page
             ->where('generations.0.error.reason', "Couldn't reach Pixelforge, gave up after 20 attempts"));
 
@@ -225,7 +225,7 @@ it('explains each failure in plain language in the history', function (string $c
         ->create(['submission_attempts' => 5]);
 
     $this->actingAs($user)
-        ->get(route('dashboard'))
+        ->get(route('generate'))
         ->assertInertia(fn (Assert $page) => $page
             ->where('generations.0.error.code', $code)
             ->where('generations.0.error.reason', $reason)

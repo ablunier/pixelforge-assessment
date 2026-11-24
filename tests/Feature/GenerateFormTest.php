@@ -11,15 +11,19 @@ use Tests\Pixelforge\InMemoryPixelforgeClient;
 use Tests\Pixelforge\NoAnswer;
 
 it('redirects guests to the login page', function () {
-    $this->get(route('dashboard'))->assertRedirect(route('login'));
+    $this->get(route('generate'))->assertRedirect(route('login'));
+});
+
+it('redirects the old /dashboard URL to the Generate page', function () {
+    $this->get('/dashboard')->assertRedirect(route('generate'));
 });
 
 it('gives the generate form the current rates and the server-computed Price Range', function () {
     $this->actingAs(User::factory()->create())
-        ->get(route('dashboard'))
+        ->get(route('generate'))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
-            ->component('Dashboard')
+            ->component('Generate')
             // Nanodollars per token
             ->where('pricing.rates', [
                 'input_text_tokens' => 5_000,
@@ -40,7 +44,7 @@ it('keeps the Pixelforge API key out of the page props', function () {
     config(['services.pixelforge.api_key' => 'pf_test_secret']);
 
     $this->actingAs(User::factory()->create())
-        ->get(route('dashboard'))
+        ->get(route('generate'))
         ->assertOk()
         ->assertDontSee('pf_test_secret');
 });
@@ -52,7 +56,7 @@ it('still shows the history, with no pricing, when Pixelforge can\'t quote rates
     Generation::factory()->for($user)->succeeded()->create();
 
     $this->actingAs($user)
-        ->get(route('dashboard'))
+        ->get(route('generate'))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->where('pricing', null)
@@ -68,11 +72,11 @@ it('prices with the last rates Pixelforge quoted while it can\'t quote them', fu
     pixelforge()->answerRates(InMemoryPixelforgeClient::publishedRates(), InMemoryPixelforgeClient::refusal('http_502'));
     $user = User::factory()->create();
 
-    $this->actingAs($user)->get(route('dashboard'))->assertOk();
+    $this->actingAs($user)->get(route('generate'))->assertOk();
     $this->travel(61)->minutes();
 
     $this->actingAs($user)
-        ->get(route('dashboard'))
+        ->get(route('generate'))
         ->assertInertia(fn (Assert $page) => $page
             ->where('pricing.rates.output_tokens', 40_000)
             ->where('priceRange', ['min' => 58_125_000, 'max' => 86_250_000])
@@ -85,11 +89,11 @@ it('never caches rates it can\'t read, so the next page asks again', function ()
     $user = User::factory()->create();
 
     $this->actingAs($user)
-        ->get(route('dashboard'))
+        ->get(route('generate'))
         ->assertInertia(fn (Assert $page) => $page->where('pricing', null));
 
     $this->actingAs($user)
-        ->get(route('dashboard'))
+        ->get(route('generate'))
         ->assertInertia(fn (Assert $page) => $page->where('pricing.rates.output_tokens', 40_000));
 });
 

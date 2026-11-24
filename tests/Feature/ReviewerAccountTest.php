@@ -43,7 +43,7 @@ it('creates the reviewer account with the configured credentials', function () {
         ->assertSuccessful();
 
     $this->post(route('login.store'), ['email' => 'reviewer@example.com', 'password' => 'a-long-secret-password'])
-        ->assertRedirect(route('dashboard'));
+        ->assertRedirect(route('generate'));
     $this->assertAuthenticatedAs(User::query()->where('email', 'reviewer@example.com')->sole());
 });
 
@@ -54,7 +54,7 @@ it('generates and prints a password when none is configured', function () {
 
     expect($password)->not->toBeNull()->and(strlen((string) $password))->toBeGreaterThanOrEqual(24);
     $this->post(route('login.store'), ['email' => 'reviewer@example.com', 'password' => $password])
-        ->assertRedirect(route('dashboard'));
+        ->assertRedirect(route('generate'));
     $this->assertAuthenticated();
 });
 
@@ -92,7 +92,7 @@ it('brings back a reviewer who deleted their account, with the configured passwo
 
     expect(User::withTrashed()->where('email', 'reviewer@example.com')->count())->toBe(1);
     $this->post(route('login.store'), ['email' => 'reviewer@example.com', 'password' => 'a-long-secret-password'])
-        ->assertRedirect(route('dashboard'));
+        ->assertRedirect(route('generate'));
     $this->assertAuthenticated();
 });
 

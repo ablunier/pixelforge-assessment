@@ -43,7 +43,7 @@ import UserMenuContent from '@/components/UserMenuContent.vue';
 import { useCurrentUrl } from '@/composables/useCurrentUrl';
 import { getInitials } from '@/composables/useInitials';
 import { toUrl } from '@/lib/utils';
-import { dashboard } from '@/routes';
+import { generate } from '@/routes';
 import { report as adminReport } from '@/routes/admin';
 import type { BreadcrumbItem, NavItem } from '@/types';
 
@@ -64,8 +64,8 @@ const activeItemStyles =
 
 const mainNavItems = computed<NavItem[]>(() => [
     {
-        title: 'Dashboard',
-        href: dashboard(),
+        title: 'Generate',
+        href: generate(),
         icon: LayoutGrid,
     },
     ...(page.props.can.viewAdminReport
@@ -158,7 +158,7 @@ const rightNavItems: NavItem[] = [
                     </Sheet>
                 </div>
 
-                <Link :href="dashboard()" class="flex items-center gap-x-2">
+                <Link :href="generate()" class="flex items-center gap-x-2">
                     <AppLogo />
                 </Link>
 
