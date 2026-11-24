@@ -7,6 +7,7 @@ import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Spinner } from '@/components/ui/spinner';
+import { generate } from '@/routes';
 
 type Props = {
     routes?: {
@@ -30,7 +31,7 @@ const { verify, isLoading, error, isSupported } = usePasskeyVerify({
           }
         : {}),
     onSuccess: (response) => {
-        router.visit(response.redirect ?? '/generate');
+        router.visit(response.redirect ?? generate().url);
     },
 });
 </script>
