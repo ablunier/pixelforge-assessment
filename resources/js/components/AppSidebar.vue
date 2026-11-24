@@ -1,7 +1,5 @@
 <script setup lang="ts">
-import { Link, usePage } from '@inertiajs/vue3';
-import { ChartColumn, History, LayoutGrid } from '@lucide/vue';
-import { computed } from 'vue';
+import { Link } from '@inertiajs/vue3';
 import AppLogo from '@/components/AppLogo.vue';
 import NavBalance from '@/components/NavBalance.vue';
 import NavMain from '@/components/NavMain.vue';
@@ -15,28 +13,10 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { dashboard } from '@/routes';
-import { report as adminReport } from '@/routes/admin';
-import { index as history } from '@/routes/generations';
-import type { NavItem } from '@/types';
+import { useMainNavItems } from '@/composables/useMainNavItems';
+import { generate } from '@/routes';
 
-const page = usePage();
-
-const mainNavItems = computed<NavItem[]>(() => [
-    {
-        title: 'Generate',
-        href: dashboard(),
-        icon: LayoutGrid,
-    },
-    {
-        title: 'History',
-        href: history(),
-        icon: History,
-    },
-    ...(page.props.can.viewAdminReport
-        ? [{ title: 'Admin report', href: adminReport(), icon: ChartColumn }]
-        : []),
-]);
+const mainNavItems = useMainNavItems();
 </script>
 
 <template>
@@ -45,7 +25,7 @@ const mainNavItems = computed<NavItem[]>(() => [
             <SidebarMenu>
                 <SidebarMenuItem>
                     <SidebarMenuButton size="lg" as-child>
-                        <Link :href="dashboard()">
+                        <Link :href="generate()">
                             <AppLogo />
                         </Link>
                     </SidebarMenuButton>

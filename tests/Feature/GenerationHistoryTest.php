@@ -186,10 +186,10 @@ it('keeps the history off the Generate page', function () {
     Generation::factory()->for($user)->create();
 
     $this->actingAs($user)
-        ->get(route('dashboard'))
+        ->get(route('generate'))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
-            ->component('Dashboard')
+            ->component('Generate')
             ->missing('generations')
             ->missing('pollHistory')
             ->has('availableBalance')

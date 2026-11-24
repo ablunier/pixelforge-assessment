@@ -15,7 +15,7 @@ it('gives a newly registered user a $1.00 Balance', function () {
         'password_confirmation' => 'password',
     ]);
 
-    $this->get(route('dashboard'))
+    $this->get(route('generate'))
         ->assertInertia(fn (Assert $page) => $page->where('balance', 1_000_000_000));
 });
 

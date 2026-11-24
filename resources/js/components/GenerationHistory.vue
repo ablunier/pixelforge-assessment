@@ -3,7 +3,7 @@ import { ImagePlus } from '@lucide/vue';
 import GenerationRow from '@/components/GenerationRow.vue';
 import TextLink from '@/components/TextLink.vue';
 import { useHistoryPolling } from '@/composables/useHistoryPolling';
-import { dashboard } from '@/routes';
+import { generate } from '@/routes';
 import type { Generation } from '@/types';
 
 const props = defineProps<{
@@ -25,7 +25,7 @@ useHistoryPolling(() => props.poll);
         <p>No Generations yet.</p>
         <p>
             Describe an image on the
-            <TextLink :href="dashboard()">Generate</TextLink> page: it will
+            <TextLink :href="generate()">Generate</TextLink> page: it will
             appear here.
         </p>
     </div>

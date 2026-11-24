@@ -3,7 +3,7 @@ import { Head } from '@inertiajs/vue3';
 import GenerateForm from '@/components/GenerateForm.vue';
 import Heading from '@/components/Heading.vue';
 import { priceRange as mirroredPriceRange } from '@/lib/pricing';
-import { dashboard } from '@/routes';
+import { generate } from '@/routes';
 import type { GenerateFormOptions, PriceRange, PricingData } from '@/types';
 
 defineOptions({
@@ -11,7 +11,7 @@ defineOptions({
         breadcrumbs: [
             {
                 title: 'Generate',
-                href: dashboard(),
+                href: generate(),
             },
         ],
     },

@@ -22,7 +22,7 @@ use Illuminate\Support\Str;
 
 /**
  * The reviewer account plus example history for local development, so the
- * dashboard has something to show without a Pixelforge key.
+ * Generate page has something to show without a Pixelforge key.
  *
  * These Generations are made up (their `gen_` ids exist nowhere), so they're
  * never seeded in production, where every Generation must match Pixelforge's

@@ -31,9 +31,9 @@ it('refuses to start a Generation while the user already has the most in progres
         ->create();
 
     $this->actingAs($user)
-        ->from(route('dashboard'))
+        ->from(route('generate'))
         ->post(route('generations.store'), generateForm())
-        ->assertRedirect(route('dashboard'))
+        ->assertRedirect(route('generate'))
         ->assertSessionHasErrors(['generate' => 'You have 5 Generations in progress. Wait for one to finish, then try again.']);
 
     expect($user->generations()->count())->toBe(StoreGenerationRequest::MAX_GENERATIONS_IN_PROGRESS);

@@ -99,17 +99,17 @@ A Laravel 13 + Inertia + Vue 3 (TypeScript) app on Postgres, with a database que
 3. **Updates** arrive through signed Webhook Events, the create response, or reconciliation, which every minute polls Generations that went quiet and resubmits `pending` ones whose job died. All three go through the same lifecycle entry point. A Generation Pixelforge hasn't finished an hour after Generate is given up on ([ADR-0007](docs/adr/0007-giving-up-on-unfinished-generations.md)).
 4. **On success** the image is downloaded in a queued job and served from local storage. Reconciliation retries a download that gave up for as long as Pixelforge's image URL works.
 
-| Part                          | Where                                                                                                                                                                         |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Money value object            | [`app/Money`](app/Money)                                                                                                                                                      |
-| Pricing rules                 | [`app/Pricing`](app/Pricing)                                                                                                                                                  |
-| Pixelforge HTTP client        | [`app/Pixelforge`](app/Pixelforge)                                                                                                                                            |
-| Generate, lifecycle, webhooks | [`app/Actions`](app/Actions)                                                                                                                                                  |
-| Submit and image jobs         | [`app/Jobs`](app/Jobs)                                                                                                                                                        |
-| Reconciliation, reviewer      | [`app/Console/Commands`](app/Console/Commands)                                                                                                                                |
-| Admin report                  | [`app/Reports`](app/Reports), [`app/Actions/CompileAdminReport.php`](app/Actions/CompileAdminReport.php)                                                                      |
-| Webhook endpoint              | [`routes/webhooks.php`](routes/webhooks.php), [`app/Http/Middleware/VerifyPixelforgeSignature.php`](app/Http/Middleware/VerifyPixelforgeSignature.php)                        |
-| Generate and History pages    | [`resources/js/pages/Dashboard.vue`](resources/js/pages/Dashboard.vue), [`History.vue`](resources/js/pages/History.vue), [`resources/js/components`](resources/js/components) |
+| Part                          | Where                                                                                                                                                                       |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Money value object            | [`app/Money`](app/Money)                                                                                                                                                    |
+| Pricing rules                 | [`app/Pricing`](app/Pricing)                                                                                                                                                |
+| Pixelforge HTTP client        | [`app/Pixelforge`](app/Pixelforge)                                                                                                                                          |
+| Generate, lifecycle, webhooks | [`app/Actions`](app/Actions)                                                                                                                                                |
+| Submit and image jobs         | [`app/Jobs`](app/Jobs)                                                                                                                                                      |
+| Reconciliation, reviewer      | [`app/Console/Commands`](app/Console/Commands)                                                                                                                              |
+| Admin report                  | [`app/Reports`](app/Reports), [`app/Actions/CompileAdminReport.php`](app/Actions/CompileAdminReport.php)                                                                    |
+| Webhook endpoint              | [`routes/webhooks.php`](routes/webhooks.php), [`app/Http/Middleware/VerifyPixelforgeSignature.php`](app/Http/Middleware/VerifyPixelforgeSignature.php)                      |
+| Generate and History pages    | [`resources/js/pages/Generate.vue`](resources/js/pages/Generate.vue), [`History.vue`](resources/js/pages/History.vue), [`resources/js/components`](resources/js/components) |
 
 ## How money is handled
 
