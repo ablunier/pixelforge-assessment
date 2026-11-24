@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, Link, usePage } from '@inertiajs/vue3';
-import { Download, Hammer, PenLine, Wallet } from '@lucide/vue';
+import { Download, PenLine, Wallet } from '@lucide/vue';
+import AppLogoIcon from '@/components/AppLogoIcon.vue';
 import { Button } from '@/components/ui/button';
 import { dashboard, home, login, register } from '@/routes';
 
@@ -37,11 +38,7 @@ const steps = [
                     :href="home()"
                     class="flex items-center gap-2 font-semibold"
                 >
-                    <span
-                        class="flex size-8 items-center justify-center rounded-md bg-primary text-primary-foreground"
-                    >
-                        <Hammer class="size-5" />
-                    </span>
+                    <AppLogoIcon />
                     {{ appName }}
                 </Link>
                 <div class="flex items-center gap-2">
