@@ -165,7 +165,8 @@ const hasClientErrors = computed(
  */
 function submit(): void {
     form.submit({
-        preserveScroll: true,
+        // History opens at the top, where the new Generation is; errors stay in place.
+        preserveScroll: 'errors',
         onSuccess: () => {
             choices.remember({ size: form.size, quality: form.quality });
             form.reset('prompt', 'reference_images');

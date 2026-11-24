@@ -155,6 +155,7 @@ it('shows a newly submitted Generation at the top of the history as pending, and
         ])
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
+            ->component('History')
             ->has('generations', 2)
             ->where('generations.0.prompt', 'A lighthouse at night')
             ->where('generations.0.status', 'pending')
