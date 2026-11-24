@@ -3,7 +3,7 @@ import { Head, Link, usePage } from '@inertiajs/vue3';
 import { Download, PenLine, Wallet } from '@lucide/vue';
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
 import { Button } from '@/components/ui/button';
-import { dashboard, home, login, register } from '@/routes';
+import { generate, home, login, register } from '@/routes';
 
 const appName = usePage().props.name;
 
@@ -43,7 +43,7 @@ const steps = [
                 </Link>
                 <div class="flex items-center gap-2">
                     <Button v-if="$page.props.auth.user" as-child size="sm">
-                        <Link :href="dashboard()">Generate</Link>
+                        <Link :href="generate()">Generate</Link>
                     </Button>
                     <template v-else>
                         <Button as-child variant="ghost" size="sm">

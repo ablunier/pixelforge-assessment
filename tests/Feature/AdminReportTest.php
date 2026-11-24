@@ -73,7 +73,7 @@ it('denies the report to a user who isn\'t an admin', function () {
 
 it('links to the report for admins only', function (bool $isAdmin) {
     $this->actingAs(User::factory()->create(['is_admin' => $isAdmin]))
-        ->get(route('dashboard'))
+        ->get(route('generate'))
         ->assertInertia(fn (Assert $page) => $page->where('can.viewAdminReport', $isAdmin));
 })->with([
     'an admin' => [true],
@@ -120,9 +120,9 @@ it('reports a chosen range of up to 92 days', function () {
 
 it('refuses a range it can\'t report', function (array $range, string $error) {
     $this->actingAs(admin())
-        ->from(route('dashboard'))
+        ->from(route('generate'))
         ->get(route('admin.report', $range))
-        ->assertRedirect(route('dashboard'))
+        ->assertRedirect(route('generate'))
         ->assertSessionHasErrors([$error]);
 })->with([
     '93 days' => [['from' => '2026-07-31', 'to' => '2026-10-31'], 'to'],
@@ -135,9 +135,9 @@ it('refuses a range ending after today, without asking Pixelforge', function () 
     $this->travelTo('2026-11-23T23:59:00Z');
 
     $this->actingAs(admin())
-        ->from(route('dashboard'))
+        ->from(route('generate'))
         ->get(route('admin.report', ['from' => '2026-11-20', 'to' => '2026-11-24']))
-        ->assertRedirect(route('dashboard'))
+        ->assertRedirect(route('generate'))
         ->assertSessionHasErrors(['to' => 'The end date can\'t be after today (UTC).']);
 
     expect(pixelforge()->usageRequests())->toBe([]);

@@ -109,7 +109,7 @@ A Laravel 13 + Inertia + Vue 3 (TypeScript) app on Postgres, with a database que
 | Reconciliation, reviewer      | [`app/Console/Commands`](app/Console/Commands)                                                                                                         |
 | Admin report                  | [`app/Reports`](app/Reports), [`app/Actions/CompileAdminReport.php`](app/Actions/CompileAdminReport.php)                                               |
 | Webhook endpoint              | [`routes/webhooks.php`](routes/webhooks.php), [`app/Http/Middleware/VerifyPixelforgeSignature.php`](app/Http/Middleware/VerifyPixelforgeSignature.php) |
-| Generate page and history     | [`resources/js/pages/Dashboard.vue`](resources/js/pages/Dashboard.vue), [`resources/js/components`](resources/js/components)                           |
+| Generate page and history     | [`resources/js/pages/Generate.vue`](resources/js/pages/Generate.vue), [`resources/js/components`](resources/js/components)                             |
 
 ## How money is handled
 

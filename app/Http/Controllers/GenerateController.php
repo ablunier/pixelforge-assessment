@@ -15,7 +15,7 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
-class DashboardController extends Controller
+class GenerateController extends Controller
 {
     /**
      * The main page: the generate form, priced live from the current rates
@@ -38,7 +38,7 @@ class DashboardController extends Controller
             return $resolved;
         };
 
-        return Inertia::render('Dashboard', [
+        return Inertia::render('Generate', [
             'pricing' => fn (): ?array => ($rates() === null) ? null : [
                 'rates' => $rates(),
                 'tokens' => Pricing::tokenRules(),

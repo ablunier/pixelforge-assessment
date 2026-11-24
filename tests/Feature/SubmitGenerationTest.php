@@ -23,7 +23,7 @@ it('saves a submitted Generation as pending with its server-computed Maximum Pri
             // Ignored: the Maximum Price is always computed on the server.
             'max_price' => 1,
         ])
-        ->assertRedirect(route('dashboard'));
+        ->assertRedirect(route('generate'));
 
     $generation = Generation::sole();
 

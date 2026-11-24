@@ -31,7 +31,7 @@ it('creates a new pending Generation with the same parameters when trying a fail
 
     $this->actingAs($user)
         ->post(route('generations.try-again', $failed))
-        ->assertRedirect(route('dashboard'));
+        ->assertRedirect(route('generate'));
 
     $retry = Generation::query()->whereKeyNot($failed->id)->sole();
 
@@ -48,7 +48,7 @@ it('creates a new pending Generation with the same parameters when trying a fail
 
     Queue::assertPushed(SubmitGenerationToPixelforge::class, fn (SubmitGenerationToPixelforge $job) => $job->generation->is($retry));
 
-    $this->get(route('dashboard'))
+    $this->get(route('generate'))
         ->assertInertia(fn (Assert $page) => $page
             ->where('generations.0.id', $retry->id)
             ->where('generations.0.status', 'pending')

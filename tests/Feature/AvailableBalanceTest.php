@@ -16,7 +16,7 @@ beforeEach(function () {
 /** Press Generate with the docs' lighthouse example, whose Maximum Price is $0.45715. */
 function pressGenerateWithLighthouse(User $user): TestResponse
 {
-    return test()->actingAs($user)->from(route('dashboard'))->post(route('generations.store'), [
+    return test()->actingAs($user)->from(route('generate'))->post(route('generations.store'), [
         'prompt' => 'A lighthouse on a cliff at dawn, oil painting',
         'size' => '1536x1024',
         'quality' => 'high',
@@ -28,16 +28,16 @@ it('gives the main page the user\'s Available Balance', function () {
     $user = User::factory()->withTopUp(Money::ofNanodollars(1_000_000_000))->create();
 
     $this->actingAs($user)
-        ->get(route('dashboard'))
+        ->get(route('generate'))
         ->assertInertia(fn (Assert $page) => $page->where('availableBalance', 1_000_000_000));
 });
 
 it('takes active Holds off the Available Balance on the main page', function () {
     $user = User::factory()->withTopUp(Money::ofNanodollars(1_000_000_000))->create();
 
-    pressGenerateWithLighthouse($user)->assertRedirect(route('dashboard'));
+    pressGenerateWithLighthouse($user)->assertRedirect(route('generate'));
 
-    $this->get(route('dashboard'))
+    $this->get(route('generate'))
         ->assertInertia(fn (Assert $page) => $page
             ->where('availableBalance', 1_000_000_000 - 457_150_000)
             ->where('balance', 1_000_000_000));
@@ -50,10 +50,10 @@ it('gives a released Hold back to the Available Balance when the history polls',
     $this->travel(61)->seconds();
     $this->artisan('generations:reconcile')->assertSuccessful();
 
-    $this->get(route('dashboard'), [
+    $this->get(route('generate'), [
         'X-Inertia' => 'true',
         'X-Inertia-Version' => app(HandleInertiaRequests::class)->version(request()),
-        'X-Inertia-Partial-Component' => 'Dashboard',
+        'X-Inertia-Partial-Component' => 'Generate',
         'X-Inertia-Partial-Data' => 'generations,pollHistory,availableBalance,balance',
     ])
         ->assertOk()
@@ -66,9 +66,9 @@ it('shows the insufficient-credits rejection on the main page as an error under 
     // $0.40 left, short of the lighthouse's Maximum Price of $0.45715.
     $user = User::factory()->withTopUp(Money::ofNanodollars(400_000_000))->create();
 
-    pressGenerateWithLighthouse($user)->assertRedirect(route('dashboard'));
+    pressGenerateWithLighthouse($user)->assertRedirect(route('generate'));
 
-    $this->get(route('dashboard'))
+    $this->get(route('generate'))
         ->assertInertia(fn (Assert $page) => $page
             ->where('errors.generate', 'Not enough credits: $0.4000 available, up to $0.4572 needed. Buy credits to continue.')
             ->where('availableBalance', 400_000_000));

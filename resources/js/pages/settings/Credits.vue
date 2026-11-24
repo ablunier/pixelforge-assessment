@@ -8,7 +8,7 @@ import Price from '@/components/Price.vue';
 import TextLink from '@/components/TextLink.vue';
 import { Button } from '@/components/ui/button';
 import { formatForDisplay } from '@/lib/money';
-import { dashboard } from '@/routes';
+import { generate } from '@/routes';
 import { show } from '@/routes/credits';
 import { edit as editProfile } from '@/routes/profile';
 import type {
@@ -60,7 +60,7 @@ const kindLabels: Record<LedgerEntryKind, string> = {
 
 /** Where a ledger entry's Generation shows in the history on the main page. */
 function generationHref(generationId: string): string {
-    return `${dashboard().url}#generation-${generationId}`;
+    return `${generate().url}#generation-${generationId}`;
 }
 
 /** Whether the entry adds to (+) or takes from (−) what the user can spend. */
