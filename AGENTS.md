@@ -12,8 +12,8 @@ PHP tests need the Sail stack running (`docker compose up`): they use the Sail P
 | --------------------- | ---------------------------------------------------- |
 | Test file             | `./vendor/bin/sail artisan test tests/Feature/X.php` |
 | Test by name          | `./vendor/bin/sail artisan test --filter='name'`     |
-| Format PHP file       | `vendor/bin/pint path/to/File.php`                   |
-| PHP static analysis   | `composer types:check`                               |
+| Format PHP file       | `./vendor/bin/sail pint path/to/File.php`            |
+| PHP static analysis   | `./vendor/bin/sail composer types:check`             |
 | Frontend lint/format  | `npm run check` (`npm run check:fix` to fix)         |
 | Frontend types        | `npm run types:check`                                |
 | Frontend tests        | `npm test`                                           |

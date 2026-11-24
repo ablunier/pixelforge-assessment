@@ -1,6 +1,6 @@
 # Cap the Price at the Maximum Price the user was shown
 
-The Maximum Price is a promise (story 19), but it's computed at submission from `GET /v1/pricing`, which is cached for about an hour, while the Provider Cost uses the rates Pixelforge locks when it accepts the Generation. If Pixelforge raises its rates in between, the Provider Cost plus Markup can exceed the Maximum Price. So the Price is `min(Provider Cost × 5/4, Maximum Price)`: the Provider Cost is always recorded truthfully at the locked rates (it must match `GET /v1/usage`), and when the cap bites, the business absorbs the difference out of its Markup. At unchanged rates the cap never bites, because the Maximum Price already assumes the most text and reasoning tokens Pixelforge can bill.
+The Maximum Price is a promise ([story 19](https://github.com/ablunier/pixelforge-assessment/issues/1)), but it's computed at submission from `GET /v1/pricing`, which is cached for about an hour, while the Provider Cost uses the rates Pixelforge locks when it accepts the Generation. If Pixelforge raises its rates in between, the Provider Cost plus Markup can exceed the Maximum Price. So the Price is `min(Provider Cost × 5/4, Maximum Price)`: the Provider Cost is always recorded truthfully at the locked rates (it must match `GET /v1/usage`), and when the cap bites, the business absorbs the difference out of its Markup. At unchanged rates the cap never bites, because the Maximum Price already assumes the most text and reasoning tokens Pixelforge can bill.
 
 ## Considered Options
 

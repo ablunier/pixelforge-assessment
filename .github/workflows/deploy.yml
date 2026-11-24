@@ -1,7 +1,7 @@
 name: deploy
 
 # Every push to main is tested, built into an image pushed to GHCR, then
-# deployed to the droplet over SSH. One-time setup and the required secrets
+# deployed to the production host over SSH. One-time setup and the required secrets
 # are in docs/deploy.md.
 
 on:

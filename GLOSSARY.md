@@ -46,6 +46,10 @@ _Avoid_: rejection, error
 Set once any Submission Attempt got no Answer or a No Verdict Refusal: Pixelforge may hold the Generation, so it stays `pending` for reconciliation's resends instead of failing after 5 attempts.
 _Avoid_: maybe-created, lost
 
+**Reconciliation**:
+The every-minute `generations:reconcile` run that polls Pixelforge for Generations that went quiet, resends `pending` ones whose submission stalled, retries image downloads, and gives up on Generations Pixelforge never finishes (ADR-0007). It changes Generations; it never compares money.
+_Avoid_: sync, polling job, reconciliation (when meaning the Usage check)
+
 ## Money
 
 **Provider Cost**:
@@ -109,3 +113,7 @@ _Avoid_: margin, revenue
 **Admin report**:
 The admins-only page of Generations, Charges, Provider Cost and Profit per UTC day and per user over a date range, with each day's Provider Cost set beside what Pixelforge billed for it.
 _Avoid_: dashboard, analytics, stats
+
+**Usage check**:
+The Admin report's comparison of each UTC day's Provider Cost with what Pixelforge billed for that day (`GET /v1/usage`), highlighting any day that differs. It only reports; it changes nothing.
+_Avoid_: reconciliation, audit
