@@ -16,6 +16,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { useGenerateChoices } from '@/composables/useGenerateChoices';
 import { formatForDisplay } from '@/lib/money';
 import { priceRange, promptLength } from '@/lib/pricing';
 import { show as buyCredits } from '@/routes/credits';
@@ -47,10 +48,15 @@ const qualityLabels: Record<Quality, string> = {
 
 // Live validation against the server's rules (Laravel Precognition): the
 // form is validated as the user goes, and the server validates it again on submit.
-const form = useForm(GenerationController.store(), {
-    prompt: '',
+const choices = useGenerateChoices({
     size: props.options.defaultSize,
     quality: props.options.defaultQuality,
+});
+
+const form = useForm(GenerationController.store(), {
+    prompt: '',
+    size: choices.initial.size,
+    quality: choices.initial.quality,
     reference_images: [] as string[],
 });
 
@@ -152,10 +158,18 @@ const hasClientErrors = computed(
         ),
 );
 
+/**
+ * On success the server redirects to History. The form is reset here anyway,
+ * not left to the redirect: the prompt and reference images are cleared, and
+ * the size and quality are kept for the next Generation.
+ */
 function submit(): void {
     form.submit({
         preserveScroll: true,
-        onSuccess: () => form.reset('prompt'),
+        onSuccess: () => {
+            choices.remember({ size: form.size, quality: form.quality });
+            form.reset('prompt', 'reference_images');
+        },
     });
 }
 </script>
