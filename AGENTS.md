@@ -21,14 +21,14 @@ PHP tests need the Sail stack running (`docker compose up`): they use the Sail P
 
 ## External References
 
-| Need                                         | File                              |
-| -------------------------------------------- | --------------------------------- |
-| Coding, testing and architecture standards   | `.sandcastle/CODING_STANDARDS.md` |
-| Domain terms (use them in names)             | `GLOSSARY.md`                     |
-| Architecture decisions                       | `docs/adr/`                       |
-| Local setup, architecture overview           | `README.md`                       |
-| Deployment                                   | `docs/deploy.md`                  |
-| Manual checks against the Pixelforge sandbox | `docs/sandbox-verification.md`    |
+| Need                                         | File                           |
+| -------------------------------------------- | ------------------------------ |
+| Coding, testing and architecture standards   | `docs/CODING_STANDARDS.md`     |
+| Domain terms (use them in names)             | `GLOSSARY.md`                  |
+| Architecture decisions                       | `docs/adr/`                    |
+| Local setup, architecture overview           | `README.md`                    |
+| Deployment                                   | `docs/deploy.md`               |
+| Manual checks against the Pixelforge sandbox | `docs/sandbox-verification.md` |
 
 ## Key Conventions
 

@@ -30,6 +30,9 @@ COPY --from=node:22-trixie-slim /usr/local/bin/node /usr/local/bin/node
 COPY --from=node:22-trixie-slim /usr/local/lib/node_modules /usr/local/lib/node_modules
 RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm
 
+ARG VITE_APP_NAME=PixelForge
+ENV VITE_APP_NAME=$VITE_APP_NAME
+
 RUN npm ci --no-audit --no-fund && npm run build
 
 # --- Runtime -----------------------------------------------------------------
