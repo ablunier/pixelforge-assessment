@@ -5,12 +5,14 @@ namespace App\Pixelforge;
 use App\Enums\Quality;
 use App\Enums\Size;
 use App\Pricing\Rates;
+use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Cache\Repository as Cache;
 
 /**
  * Wraps any PixelforgeClient to cache its rates for about an hour and, while
- * they can't be quoted, fall back on the last rates it quoted. Everything else
- * passes straight through.
+ * they can't be quoted, fall back on the last rates it quoted. It caches billed
+ * costs for a minute, so refreshing the admin report doesn't use up the rate
+ * limit. Everything else passes straight through.
  */
 final readonly class CachingPixelforgeClient implements PixelforgeClient
 {
@@ -26,6 +28,14 @@ final readonly class CachingPixelforgeClient implements PixelforgeClient
     private const string LAST_KNOWN_RATES_CACHE_KEY = 'pixelforge.rates-per-token.last-known';
 
     private const int LAST_KNOWN_RATES_RETRY_SECONDS = 60;
+
+    /**
+     * What Pixelforge billed is cached per date range, as PixelforgeBilled::jsonSerialize()
+     * gives them. An entry in any other shape counts as a miss.
+     */
+    private const string BILLED_CACHE_KEY = 'pixelforge.billed';
+
+    private const int BILLED_CACHE_SECONDS = 60;
 
     public function __construct(
         private PixelforgeClient $pixelforge,
@@ -79,6 +89,25 @@ final readonly class CachingPixelforgeClient implements PixelforgeClient
     private static function cachedRates(mixed $perToken): ?Rates
     {
         return Rates::tryFromNanodollarsPerToken($perToken);
+    }
+
+    /**
+     * What Pixelforge billed, cached for a minute per date range. A failure
+     * isn't cached, so the next call asks again.
+     */
+    public function billed(CarbonImmutable $startDate, CarbonImmutable $endDate): PixelforgeBilled
+    {
+        $key = self::BILLED_CACHE_KEY.'.'.$startDate->toDateString().'.'.$endDate->toDateString();
+        $cached = PixelforgeBilled::tryFromNanodollars($this->cache->get($key));
+
+        if ($cached !== null) {
+            return $cached;
+        }
+
+        $billed = $this->pixelforge->billed($startDate, $endDate);
+        $this->cache->put($key, $billed->jsonSerialize(), self::BILLED_CACHE_SECONDS);
+
+        return $billed;
     }
 
     public function createGeneration(string $generationId, string $prompt, Size $size, Quality $quality, array $referenceImages): GenerationSnapshot

@@ -12,7 +12,7 @@ use Tests\Pixelforge\InMemoryPixelforgeClient;
 
 it('saves a submitted Generation as pending with its server-computed Maximum Price and queues its submission', function () {
     Queue::fake();
-    $user = User::factory()->create();
+    $user = User::factory()->withTopUp()->create();
 
     $this->actingAs($user)
         ->post(route('generations.store'), [
@@ -43,7 +43,7 @@ it('saves a submitted Generation as pending with its server-computed Maximum Pri
 it('saves nothing when the submitted form is invalid', function () {
     Queue::fake();
 
-    $this->actingAs(User::factory()->create())
+    $this->actingAs(User::factory()->withTopUp()->create())
         ->post(route('generations.store'), ['prompt' => '', 'size' => '1024x1024', 'quality' => 'medium', 'reference_images' => []])
         ->assertSessionHasErrors('prompt');
 

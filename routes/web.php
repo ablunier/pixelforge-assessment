@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AdminReportController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\GenerationController;
 use App\Http\Controllers\GenerationImageController;
@@ -20,6 +21,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('generations.image');
     Route::get('generations/{generation}/image/download', [GenerationImageController::class, 'download'])
         ->name('generations.image.download');
+    Route::get('admin/report', AdminReportController::class)
+        ->can('viewAdminReport')
+        ->name('admin.report');
 });
 
 require __DIR__.'/settings.php';

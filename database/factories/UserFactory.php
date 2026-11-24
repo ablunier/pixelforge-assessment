@@ -2,7 +2,10 @@
 
 namespace Database\Factories;
 
+use App\Actions\TopUp;
+use App\Enums\CreditPack;
 use App\Models\User;
+use App\Money\Money;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -56,5 +59,24 @@ class UserFactory extends Factory
             'two_factor_recovery_codes' => encrypt(json_encode(['recovery-code-1'])),
             'two_factor_confirmed_at' => now(),
         ]);
+    }
+
+    /**
+     * Indicate that the user is an admin, who can see the admin report.
+     */
+    public function admin(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'is_admin' => true,
+        ]);
+    }
+
+    /**
+     * Indicate that the user has bought `$amount` of Credits (a $25 pack
+     * unless told otherwise, enough for any test's Generations): one Top-up.
+     */
+    public function withTopUp(?Money $amount = null): static
+    {
+        return $this->afterCreating(fn (User $user) => app(TopUp::class)->handle($user, $amount ?? CreditPack::TwentyFive->amount()));
     }
 }

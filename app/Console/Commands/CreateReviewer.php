@@ -3,10 +3,12 @@
 namespace App\Console\Commands;
 
 use App\Actions\CreateGeneration;
+use App\Actions\TopUp;
 use App\Enums\Quality;
 use App\Enums\Size;
 use App\Generations\GenerationParameters;
 use App\Models\User;
+use App\Money\Money;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -16,6 +18,12 @@ use Illuminate\Support\Str;
  * Sets up the reviewers' account from config('reviewer'). The password is
  * never committed: it comes from REVIEWER_PASSWORD, or is generated and
  * printed once when the account is first created.
+ *
+ * The reviewer is an admin, so they can see the admin report, and is topped
+ * up to a Balance of CREDITS_NANODOLLARS: enough for the examples plus one
+ * Generation of every quality and size. A reviewer whose Balance already
+ * reaches it gets no Top-up, so running this again adds nothing until
+ * they've spent some.
  *
  * With --examples it also presses Generate once per Pixelforge sandbox
  * keyword, through the real pipeline, so the reviewer's history holds real
@@ -39,9 +47,13 @@ class CreateReviewer extends Command
         '[overloaded]' => 'A mountain cabin in deep snow, woodcut [overloaded]',
     ];
 
-    public function handle(CreateGeneration $createGeneration): int
+    /** The Balance the reviewer is topped up to: $10.00. */
+    public const int CREDITS_NANODOLLARS = 10_000_000_000;
+
+    public function handle(CreateGeneration $createGeneration, TopUp $topUp): int
     {
         $reviewer = $this->createOrUpdateReviewer();
+        $this->topUpToCredits($reviewer, $topUp);
 
         if ($this->option('examples')) {
             $this->submitMissingExamples($reviewer, $createGeneration);
@@ -56,8 +68,12 @@ class CreateReviewer extends Command
         $configuredPassword = config('reviewer.password');
         $generatedPassword = null;
 
-        $reviewer = User::query()->firstOrNew(['email' => $email]);
+        // A reviewer who deleted their account still holds the email, so bring
+        // that account back rather than create a second one.
+        $reviewer = User::withTrashed()->firstOrNew(['email' => $email]);
+        $reviewer->deleted_at = null;
         $reviewer->name = (string) config('reviewer.name');
+        $reviewer->is_admin = true;
 
         if (is_string($configuredPassword) && $configuredPassword !== '') {
             $reviewer->password = $configuredPassword;
@@ -75,6 +91,20 @@ class CreateReviewer extends Command
         }
 
         return $reviewer;
+    }
+
+    /**
+     * Top the reviewer up by whatever their Balance lacks of CREDITS_NANODOLLARS.
+     */
+    private function topUpToCredits(User $reviewer, TopUp $topUp): void
+    {
+        $shortfall = Money::ofNanodollars(self::CREDITS_NANODOLLARS)->minus($reviewer->balance());
+
+        if ($shortfall->isGreaterThan(Money::zero())) {
+            $topUp->handle($reviewer, $shortfall);
+        }
+
+        $this->components->twoColumnDetail('Balance', '$'.$reviewer->balance()->formatForDisplay());
     }
 
     /**

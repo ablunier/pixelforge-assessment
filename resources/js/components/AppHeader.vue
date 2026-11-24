@@ -1,10 +1,18 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
-import { BookOpen, Folder, LayoutGrid, Menu, Search } from '@lucide/vue';
+import {
+    BookOpen,
+    ChartColumn,
+    Folder,
+    LayoutGrid,
+    Menu,
+    Search,
+} from '@lucide/vue';
 import { computed } from 'vue';
 import AppLogo from '@/components/AppLogo.vue';
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
 import Breadcrumbs from '@/components/Breadcrumbs.vue';
+import NavBalance from '@/components/NavBalance.vue';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -36,6 +44,7 @@ import { useCurrentUrl } from '@/composables/useCurrentUrl';
 import { getInitials } from '@/composables/useInitials';
 import { toUrl } from '@/lib/utils';
 import { dashboard } from '@/routes';
+import { report as adminReport } from '@/routes/admin';
 import type { BreadcrumbItem, NavItem } from '@/types';
 
 type Props = {
@@ -53,13 +62,16 @@ const { isCurrentUrl, whenCurrentUrl } = useCurrentUrl();
 const activeItemStyles =
     'text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100';
 
-const mainNavItems: NavItem[] = [
+const mainNavItems = computed<NavItem[]>(() => [
     {
         title: 'Dashboard',
         href: dashboard(),
         icon: LayoutGrid,
     },
-];
+    ...(page.props.can.viewAdminReport
+        ? [{ title: 'Admin report', href: adminReport(), icon: ChartColumn }]
+        : []),
+]);
 
 const rightNavItems: NavItem[] = [
     {
@@ -189,6 +201,7 @@ const rightNavItems: NavItem[] = [
                 </div>
 
                 <div class="ml-auto flex items-center space-x-2">
+                    <NavBalance />
                     <div class="relative flex items-center space-x-1">
                         <Button
                             variant="ghost"

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\CreditsController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SecurityController;
 use Illuminate\Auth\Middleware\RequirePassword;
@@ -24,6 +25,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('user-password.update');
 
     Route::inertia('settings/appearance', 'settings/Appearance')->name('appearance.edit');
+
+    Route::get('settings/credits', [CreditsController::class, 'show'])->name('credits.show');
+    Route::post('settings/credits', [CreditsController::class, 'store'])->name('credits.store');
 });
 
 Route::get('.well-known/passkey-endpoints', function () {

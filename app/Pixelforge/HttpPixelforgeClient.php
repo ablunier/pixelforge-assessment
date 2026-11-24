@@ -5,6 +5,7 @@ namespace App\Pixelforge;
 use App\Enums\Quality;
 use App\Enums\Size;
 use App\Pricing\Rates;
+use Carbon\CarbonImmutable;
 use Closure;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as Http;
@@ -30,6 +31,24 @@ final readonly class HttpPixelforgeClient implements PixelforgeClient
 
         try {
             return Rates::fromPixelforge((array) $response->json('rates'));
+        } catch (InvalidArgumentException $exception) {
+            throw UnexpectedPixelforgeResponse::because($exception);
+        }
+    }
+
+    public function billed(CarbonImmutable $startDate, CarbonImmutable $endDate): PixelforgeBilled
+    {
+        $response = $this->send(fn (PendingRequest $request): Response => $request->get('usage', [
+            'start_date' => $startDate->toDateString(),
+            'end_date' => $endDate->toDateString(),
+        ]));
+
+        if ($response->failed()) {
+            throw PixelforgeError::fromResponse($response);
+        }
+
+        try {
+            return PixelforgeBilled::fromPixelforge((array) $response->json());
         } catch (InvalidArgumentException $exception) {
             throw UnexpectedPixelforgeResponse::because($exception);
         }

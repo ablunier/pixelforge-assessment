@@ -131,7 +131,7 @@ Create the reviewer account and submit one real Generation per sandbox keyword, 
 docker compose exec -e REVIEWER_EMAIL=<reviewer-email> app php artisan reviewer:create --examples
 ```
 
-It prints a generated password once; share it privately with the submission. To choose the password instead, add `REVIEWER_EMAIL` and `REVIEWER_PASSWORD` to `/opt/stacks/pixelforge/.env` and recreate the containers. Don't run `db:seed` for this: in production it creates the account but no example Generations, since made-up ones wouldn't match Pixelforge's records.
+It makes the reviewer an admin (so they see the admin report) and tops their Balance up to $10.00 before submitting, which covers the examples' Holds and leaves enough to try every quality and size. Running it again adds Credits only if the Balance has dropped below $10.00. It prints a generated password once; share it privately with the submission. To choose the password instead, add `REVIEWER_EMAIL` and `REVIEWER_PASSWORD` to `/opt/stacks/pixelforge/.env` and recreate the containers. Don't run `db:seed` for this: in production it creates the account but no example Generations, since made-up ones wouldn't match Pixelforge's records.
 
 ## Operating
 

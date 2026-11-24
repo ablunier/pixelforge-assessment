@@ -19,6 +19,11 @@ final readonly class Money
         return new self($nanodollars);
     }
 
+    public static function zero(): self
+    {
+        return new self(0);
+    }
+
     /**
      * Parse a decimal USD string with up to 9 fractional digits, such as
      * Pixelforge's "0.169080000" costs or "12.50" rates.

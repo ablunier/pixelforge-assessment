@@ -3,7 +3,9 @@
 use App\Enums\GenerationStatus;
 use App\Jobs\SubmitGenerationToPixelforge;
 use App\Models\Generation;
+use App\Models\User;
 use App\Models\WebhookEvent;
+use App\Money\Money;
 use Illuminate\Http\Response;
 use Illuminate\Testing\TestResponse;
 use Tests\Pixelforge\InMemoryPixelforgeClient;
@@ -376,4 +378,65 @@ it('acknowledges a ping and stores it without touching any Generation', function
         ->and($stored->type)->toBe('ping')
         ->and($stored->generation_id)->toBeNull()
         ->and($stored->processed_at)->not->toBeNull();
+});
+
+/**
+ * Press Generate with the lighthouse as a user with $1.00, so its Maximum
+ * Price of 457,150,000 nanodollars is held. The queue runs synchronously, so
+ * Pixelforge has accepted it as `queued` by the time this returns.
+ */
+function heldLighthouse(): Generation
+{
+    test()->actingAs(User::factory()->withTopUp(Money::ofNanodollars(1_000_000_000))->create())
+        ->post(route('generations.store'), [
+            'prompt' => 'A lighthouse on a cliff at dawn, oil painting',
+            'size' => '1536x1024',
+            'quality' => 'high',
+            'reference_images' => ['https://example.com/style.png'],
+        ])
+        ->assertRedirect(route('dashboard'));
+
+    return Generation::query()->latest('id')->firstOrFail();
+}
+
+/** The lighthouse's ledger once it succeeded: its Hold, the Charge of its Price, and the rest released. */
+const LIGHTHOUSE_CHARGED = ['hold' => [457_150_000], 'charge' => [381_887_500], 'hold_release' => [75_262_500]];
+
+it('charges once and releases once when the succeeded event is delivered again or sent twice', function () {
+    $generation = heldLighthouse();
+    $succeeded = pixelforgeGenerationFor($generation, 'succeeded', ['id' => $generation->pixelforge_id]);
+
+    deliverWebhook(webhookEvent('generation.succeeded', $succeeded, id: 'evt_first'))->assertOk();
+    deliverWebhook(webhookEvent('generation.succeeded', $succeeded, id: 'evt_first'), attempt: 2)->assertOk();
+    deliverWebhook(webhookEvent('generation.succeeded', $succeeded, id: 'evt_second'))->assertOk();
+
+    expect(ledgerOf($generation))->toBe(LIGHTHOUSE_CHARGED);
+});
+
+it('neither releases nor charges again when events for a final Generation arrive out of order', function () {
+    $generation = heldLighthouse();
+
+    deliverWebhook(webhookEvent('generation.succeeded', pixelforgeGenerationFor($generation, 'succeeded', ['id' => $generation->pixelforge_id]), id: 'evt_succeeded'))->assertOk();
+    deliverWebhook(webhookEvent('generation.processing', pixelforgeGenerationFor($generation, 'processing', ['id' => $generation->pixelforge_id]), id: 'evt_processing'))->assertOk();
+    deliverWebhook(webhookEvent('generation.failed', pixelforgeGenerationFor($generation, 'failed', [
+        'id' => $generation->pixelforge_id,
+        'error' => ['code' => 'internal_error', 'message' => 'Something went wrong on our side.'],
+    ]), id: 'evt_failed'))->assertOk();
+
+    expect(ledgerOf($generation))->toBe(LIGHTHOUSE_CHARGED);
+});
+
+it('charges once when the succeeded event arrives while a poll is finding the same success', function () {
+    $generation = heldLighthouse();
+    pixelforge()->answerRetrieves($generation, function () use ($generation) {
+        deliverWebhook(webhookEvent('generation.succeeded', pixelforgeGenerationFor($generation, 'succeeded', ['id' => $generation->pixelforge_id])))->assertOk();
+
+        return Reported::succeeded();
+    });
+
+    $this->travel(61)->seconds();
+    $this->artisan('generations:reconcile')->assertSuccessful();
+
+    expect($generation->refresh()->status)->toBe(GenerationStatus::Succeeded)
+        ->and(ledgerOf($generation))->toBe(LIGHTHOUSE_CHARGED);
 });

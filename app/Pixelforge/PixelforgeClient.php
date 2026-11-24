@@ -5,6 +5,7 @@ namespace App\Pixelforge;
 use App\Enums\Quality;
 use App\Enums\Size;
 use App\Pricing\Rates;
+use Carbon\CarbonImmutable;
 
 /**
  * The app's boundary with Pixelforge: its HTTP API and its image host. Pixelforge payloads and
@@ -36,6 +37,17 @@ interface PixelforgeClient
      * @throws PricingUnavailable when no rates can be had, fresh or earlier ones (CachingPixelforgeClient only)
      */
     public function rates(): Rates;
+
+    /**
+     * What Pixelforge billed our API key per UTC day, `$startDate` to
+     * `$endDate` inclusive, from GET /v1/usage. Pixelforge reports at most 92
+     * days at a time.
+     *
+     * @throws PixelforgeError when Pixelforge rejects the request
+     * @throws PixelforgeUnreachable when Pixelforge can't be reached
+     * @throws UnexpectedPixelforgeResponse when a success response isn't usable usage
+     */
+    public function billed(CarbonImmutable $startDate, CarbonImmutable $endDate): PixelforgeBilled;
 
     /**
      * POST /v1/generations. The local Generation id is sent as the

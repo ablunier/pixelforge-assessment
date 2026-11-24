@@ -69,6 +69,28 @@ it('seeds failures with no Provider Cost or Price and a readable reason', functi
                 === ['Blocked by content policy', "The model couldn't produce an image"]));
 });
 
+it('pays for the examples like any Generation: each success charged its Price, every Hold settled', function () {
+    $this->seed();
+
+    $reviewer = User::query()->where('email', 'reviewer@example.com')->sole();
+
+    expect(ledgerOf(seededExample('[succeed]'))['charge'])->toBe([381_887_500])
+        ->and(ledgerOf(seededExample('[duplicate]'))['charge'])->toBe([18_962_500])
+        ->and(ledgerOf(seededExample('[fail]')))->not->toHaveKey('charge')
+        ->and(ledgerOf(seededExample('[blocked]')))->not->toHaveKey('charge')
+        ->and($reviewer->availableBalance()->nanodollars())->toBe($reviewer->balance()->nanodollars())
+        ->and($reviewer->balance()->nanodollars())->toBeGreaterThanOrEqual(0);
+});
+
+it('seeds the reviewer as an admin with $10 of Credits, less the examples\' Charges', function () {
+    $this->seed();
+
+    $reviewer = User::query()->where('email', 'reviewer@example.com')->sole();
+    // $10.00 minus the [succeed] and [duplicate] Charges.
+    expect($reviewer->balance()->nanodollars())->toBe(9_599_150_000);
+    $this->actingAs($reviewer)->get(route('admin.report'))->assertOk();
+});
+
 it('fabricates no example Generations in production', function () {
     app()->detectEnvironment(fn (): string => 'production');
 

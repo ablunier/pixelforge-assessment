@@ -19,6 +19,12 @@ declare module '@inertiajs/core' {
         sharedPageProps: {
             name: string;
             auth: Auth;
+            /** The signed-in user's Balance in integer nanodollars; null when signed out. */
+            balance: number | null;
+            /** What the signed-in user may do, for showing only the links they can follow. */
+            can: {
+                viewAdminReport: boolean;
+            };
             sidebarOpen: boolean;
             [key: string]: unknown;
         };

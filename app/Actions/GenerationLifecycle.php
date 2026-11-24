@@ -2,11 +2,15 @@
 
 namespace App\Actions;
 
+use App\Credits\InsufficientAvailableBalance;
 use App\Enums\GenerationStatus;
+use App\Enums\LedgerEntryKind;
 use App\Generations\GenerationParameters;
 use App\Jobs\StoreGenerationImage;
 use App\Models\Generation;
+use App\Models\LedgerEntry;
 use App\Models\User;
+use App\Money\Money;
 use App\Pixelforge\Answer;
 use App\Pixelforge\Decision;
 use App\Pixelforge\Fail;
@@ -33,19 +37,38 @@ final class GenerationLifecycle
 {
     /**
      * Open a Generation: save it as `pending` with the Maximum Price its
-     * parameters have at `$rates`. Submitting it to Pixelforge is the
-     * caller's job.
+     * parameters have at `$rates`, and Hold that Maximum Price from the
+     * user's Available Balance (ADR-0002). The user's row stays locked until
+     * both are saved, so concurrent submissions can't overspend. Submitting
+     * it to Pixelforge is the caller's job.
+     *
+     * @throws InsufficientAvailableBalance when the Available Balance can't cover the Maximum Price; nothing is saved
      */
     public function open(User $user, GenerationParameters $parameters, Rates $rates): Generation
     {
-        return DB::transaction(fn (): Generation => $user->generations()->create([
-            'prompt' => $parameters->prompt,
-            'size' => $parameters->size,
-            'quality' => $parameters->quality,
-            'reference_images' => $parameters->referenceImages,
-            'status' => GenerationStatus::Pending,
-            'max_price' => $parameters->maximumPrice($rates),
-        ]));
+        $maximumPrice = $parameters->maximumPrice($rates);
+
+        return DB::transaction(function () use ($user, $parameters, $maximumPrice): Generation {
+            $user = User::query()->whereKey($user->getKey())->lockForUpdate()->firstOrFail();
+
+            $availableBalance = $user->availableBalance();
+            if ($availableBalance->isLessThan($maximumPrice)) {
+                throw new InsufficientAvailableBalance($availableBalance, $maximumPrice);
+            }
+
+            $generation = $user->generations()->create([
+                'prompt' => $parameters->prompt,
+                'size' => $parameters->size,
+                'quality' => $parameters->quality,
+                'reference_images' => $parameters->referenceImages,
+                'status' => GenerationStatus::Pending,
+                'max_price' => $maximumPrice,
+            ]);
+
+            LedgerEntry::record($generation->user_id, LedgerEntryKind::Hold, $maximumPrice, $generation->id);
+
+            return $generation;
+        });
     }
 
     /**
@@ -166,6 +189,7 @@ final class GenerationLifecycle
             $generation->status = GenerationStatus::Failed;
             $generation->error_code = GenerationErrorCode::NeverFinished->value;
             $generation->error_message = null;
+            $this->settleHold($generation, null);
         }
     }
 
@@ -182,6 +206,7 @@ final class GenerationLifecycle
             $generation->status = GenerationStatus::Failed;
             $generation->error_code = $errorCode instanceof GenerationErrorCode ? $errorCode->value : $errorCode;
             $generation->error_message = $errorMessage;
+            $this->settleHold($generation, null);
         }
     }
 
@@ -200,6 +225,7 @@ final class GenerationLifecycle
         $generation->reasoning_tokens = $snapshot->usage->reasoningTokens;
         $generation->provider_cost = Pricing::providerCost($snapshot->usage, $lockedRates);
         $generation->price = Pricing::price($generation->provider_cost, $generation->max_price);
+        $this->settleHold($generation, $generation->price);
         $generation->provider_image_url = $snapshot->imageUrl;
         $generation->provider_image_url_expires_at = $snapshot->imageUrlExpiresAt;
 
@@ -214,5 +240,38 @@ final class GenerationLifecycle
     {
         $generation->error_code = $snapshot->errorCode ?? GenerationErrorCode::GenerationFailed->value;
         $generation->error_message = $snapshot->errorMessage;
+        $this->settleHold($generation, null);
+    }
+
+    /**
+     * Settle a Generation's Hold now that it's final: Charge `$price` for a
+     * success (null for a failure) and release the rest of the Hold. Runs in
+     * the transaction that made the Generation final, which happens once, and
+     * the ledger's unique index refuses a second Charge or Hold release
+     * regardless. A Generation opened before Holds existed has none, and is
+     * neither charged nor released.
+     */
+    private function settleHold(Generation $generation, ?Money $price): void
+    {
+        $hold = LedgerEntry::query()
+            ->where('generation_id', $generation->id)
+            ->where('kind', LedgerEntryKind::Hold)
+            ->first();
+
+        if ($hold === null) {
+            return;
+        }
+
+        $price ??= Money::zero();
+
+        if ($price->isGreaterThan(Money::zero())) {
+            LedgerEntry::record($generation->user_id, LedgerEntryKind::Charge, $price, $generation->id);
+        }
+
+        // Nothing is left to release when the Price was capped at the Maximum Price (ADR-0004).
+        $remainder = $hold->amount->minus($price);
+        if ($remainder->isGreaterThan(Money::zero())) {
+            LedgerEntry::record($generation->user_id, LedgerEntryKind::HoldRelease, $remainder, $generation->id);
+        }
     }
 }
