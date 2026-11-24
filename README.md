@@ -132,7 +132,7 @@ Credits live in an append-only ledger of Top-ups, Holds, Hold releases and Charg
 
 ### Admin report
 
-Admins (the reviewer account, or anyone made one with `php artisan user:make-admin <email>`) see a report at `/admin/report` for a date range of up to 92 days, the last 30 by default:
+Admins (the reviewer account, or anyone made one with `php artisan user:make-admin <email>`) see a report at `/admin/report` for a date range of up to 92 days, the last 7 by default:
 
 - **Daily totals**: Generations, Charges (user spend), Provider Cost and Profit, counting each succeeded Generation on the UTC day it completed, as Pixelforge bills. Generations from before Balances existed have no Charge and count as zero spend.
 - **Per-user totals** of the same figures.
