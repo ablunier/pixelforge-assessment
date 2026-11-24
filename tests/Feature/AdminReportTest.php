@@ -152,16 +152,16 @@ it('reports a range ending today', function () {
         ->assertInertia(fn (Assert $page) => $page->where('range.to', '2026-11-23'));
 });
 
-it('covers the last 30 UTC days by default, with a row for each day even without activity', function () {
+it('covers the last 7 UTC days by default, with a row for each day even without activity', function () {
     $this->travelTo('2026-11-23T10:00:00Z');
 
     $this->actingAs(admin())
         ->get(route('admin.report'))
         ->assertInertia(fn (Assert $page) => $page
-            ->where('range', ['from' => '2026-10-25', 'to' => '2026-11-23', 'maxDays' => 92])
-            ->has('days', 30)
-            ->where('days.0', ['date' => '2026-10-25', 'generations' => 0, 'charges' => 0, 'providerCost' => 0, 'profit' => 0, 'pixelforgeBilled' => 0, 'costDifference' => 0])
-            ->where('days.29.date', '2026-11-23')
+            ->where('range', ['from' => '2026-11-17', 'to' => '2026-11-23', 'maxDays' => 92])
+            ->has('days', 7)
+            ->where('days.0', ['date' => '2026-11-17', 'generations' => 0, 'charges' => 0, 'providerCost' => 0, 'profit' => 0, 'pixelforgeBilled' => 0, 'costDifference' => 0])
+            ->where('days.6.date', '2026-11-23')
             ->has('users', 0)
             ->where('totals', ['generations' => 0, 'charges' => 0, 'providerCost' => 0, 'profit' => 0, 'pixelforgeBilled' => 0, 'costDifference' => 0]));
 });

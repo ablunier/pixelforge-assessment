@@ -17,7 +17,7 @@ use Illuminate\Validation\Validator;
  */
 class AdminReportRequest extends FormRequest
 {
-    public const int DEFAULT_DAYS = 30;
+    public const int DEFAULT_DAYS = 7;
 
     public const int MAX_DAYS = 92;
 
